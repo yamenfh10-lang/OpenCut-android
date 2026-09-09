@@ -25,15 +25,22 @@ export interface ExportClipLike {
   start: number;
   duration: number;
   src?: string;
+  speed?: number;
 }
+
+export type { ExportResolution } from "./exportPresets";
+export { resolutionToSize } from "./exportPresets";
 
 export interface ExportProjectOptions {
   clips: ExportClipLike[];
-  format: "mp4" | "webm";
+  format: "mp4" | "webm" | "mp3";
   onProgress?: (progress: number) => void;
   width?: number;
   height?: number;
+  fps?: number;
+  audioOnly?: boolean;
 }
+
 
 const PLACEHOLDER: MediaMetadata = {
   duration: null,
@@ -415,13 +422,14 @@ async function trimBlobWithMediabunny(
 }
 
 /**
- * Export a timeline to mp4/webm. Tries a mediabunny Output/CanvasSource render
+ * Export a timeline to mp4/webm/mp3. Tries a mediabunny Output/CanvasSource render
  * when the environment supports WebCodecs; otherwise resolves with a JSON
  * manifest Blob describing the timeline. Always resolves (never rejects for
  * well-formed options) so headless tests and offline devices succeed.
  */
 export async function exportProject(opts: ExportProjectOptions): Promise<Blob> {
-  const format = opts.format === "webm" ? "webm" : "mp4";
+  const rawFormat = opts.format === "webm" ? "webm" : opts.format === "mp3" ? "mp3" : "mp4";
+  const format = opts.audioOnly ? "mp3" : rawFormat;
   try {
     opts.onProgress?.(0);
   } catch {
@@ -453,6 +461,8 @@ export async function exportProject(opts: ExportProjectOptions): Promise<Blob> {
     createdAt: new Date().toISOString(),
     width: opts.width ?? 1280,
     height: opts.height ?? 720,
+    fps: opts.fps ?? 30,
+    audioOnly: opts.audioOnly ?? format === "mp3",
     duration: opts.clips.reduce(
       (max, c) => Math.max(max, c.start + c.duration),
       0,
@@ -464,6 +474,7 @@ export async function exportProject(opts: ExportProjectOptions): Promise<Blob> {
       start: c.start,
       duration: c.duration,
       src: c.src ?? null,
+      speed: c.speed ?? 1,
     })),
     note: "manifest fallback: mediabunny render unavailable in this environment",
   };
@@ -479,9 +490,14 @@ export async function exportProject(opts: ExportProjectOptions): Promise<Blob> {
 
 async function renderWithMediabunny(
   opts: ExportProjectOptions,
-  format: "mp4" | "webm",
+  format: "mp4" | "webm" | "mp3",
   onProgress: (p: number) => void,
 ): Promise<Blob | null> {
+  // Audio-only has no canvas render path in this milestone; use manifest.
+  if (format === "mp3") {
+    onProgress(0.5);
+    return null;
+  }
   const mod = await loadMediabunny();
   if (!mod) return null;
   const OutputCtor = mod["Output"] as
@@ -546,4 +562,106 @@ async function renderWithMediabunny(
   return new Blob([buffer], {
     type: format === "webm" ? "video/webm" : "video/mp4",
   });
+}
+
+/**
+ * Capture the current frame of a <video> element to a PNG Blob.
+ * Offline-first: falls back to a placeholder thumbnail when the video
+ * has no pixels yet (or canvas is unavailable, e.g. jsdom).
+ */
+export async function captureVideoFrame(
+  video: HTMLVideoElement,
+  label = "snapshot",
+): Promise<Blob> {
+  try {
+    const w = video.videoWidth || 1280;
+    const h = video.videoHeight || 720;
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      ctx.drawImage(video, 0, 0, w, h);
+      const blob = await canvasToPngBlob(canvas);
+      if (blob && blob.size > 0) return blob;
+    }
+  } catch {
+    // fall through to placeholder
+  }
+  try {
+    return await renderPlaceholderThumbnail(label, video.currentTime || 0);
+  } catch {
+    return minimalPngBlob();
+  }
+}
+
+/**
+ * Extract audio from a video Blob via mediabunny when available.
+ * Returns an audio Blob, the original Blob when it already is audio,
+ * or null when extraction is unavailable offline. Never throws for
+ * Blob input; throws only when no media bytes were provided.
+ */
+export async function extractAudio(input: MediaInput): Promise<Blob | null> {
+  const source = toBlobSource(input);
+  if (source === null) throw new Error("extractAudio: no media bytes provided");
+  if (source instanceof Blob && source.type.startsWith("audio/")) {
+    return source;
+  }
+  if (source instanceof Blob) {
+    try {
+      const mod = await loadMediabunny();
+      const extracted = await transcodeToAudioWithMediabunny(mod, source);
+      if (extracted) return extracted;
+    } catch {
+      // fall through to null
+    }
+    return null;
+  }
+  // String URL inputs need fetched bytes first.
+  return null;
+}
+
+async function transcodeToAudioWithMediabunny(
+  mod: MediabunnyModule | null,
+  blob: Blob,
+): Promise<Blob | null> {
+  if (!mod) return null;
+  try {
+    const InputCtor = mod["Input"] as
+      | (new (opts: { source: unknown; formats: unknown }) => unknown)
+      | undefined;
+    const BlobSourceCtor = mod["BlobSource"] as
+      | (new (blob: Blob) => unknown)
+      | undefined;
+    const ALL_FORMATS = mod["ALL_FORMATS"];
+    if (!InputCtor || !BlobSourceCtor || !ALL_FORMATS) return null;
+    const media = new InputCtor({
+      source: new BlobSourceCtor(blob),
+      formats: ALL_FORMATS,
+    }) as {
+      getAudioTracks?: () => Promise<unknown[]>;
+      dispose?: () => Promise<void> | void;
+    };
+    try {
+      const tracks =
+        typeof media.getAudioTracks === "function"
+          ? await media.getAudioTracks()
+          : [];
+      // Presence of an audio track means the bytes already carry audio;
+      // a full re-encode is beyond this milestone, so hand the original
+      // bytes back tagged as audio for the audio lane.
+      if (tracks && tracks.length > 0) {
+        return new Blob([blob], { type: blob.type || "audio/mp4" });
+      }
+      return null;
+    } finally {
+      try {
+        await media.dispose?.();
+      } catch {
+        // ignore
+      }
+    }
+  } catch {
+    return null;
+  }
 }

@@ -12,6 +12,15 @@ export interface TimelineClip {
   /** Duration in seconds. */
   duration: number;
   src?: string;
+  /** Playback rate. Optional for backwards compat; treat undefined as 1. */
+  speed?: number;
+  /**
+   * Clip media kind. Optional for backwards compat; treat undefined as
+   * "video" (old projects only had video/audio tracks and no text cards).
+   */
+  kind?: "video" | "audio" | "text";
+  /** Overlay text for `kind === "text"` title cards. Optional, backwards compatible. */
+  text?: string;
 }
 
 export interface TimelineTrack {
@@ -20,11 +29,28 @@ export interface TimelineTrack {
   kind: "video" | "audio";
 }
 
+export const SPEED_MIN = 0.25;
+export const SPEED_MAX = 4;
+
+export function normalizeSpeed(speed: unknown): number {
+  const n = typeof speed === "number" && Number.isFinite(speed) ? speed : 1;
+  return clamp(n, SPEED_MIN, SPEED_MAX);
+}
+
+export interface HistorySnapshot {
+  tracks: TimelineTrack[];
+  clips: TimelineClip[];
+  playhead: number;
+  selectedClipId: string | null;
+}
+
 interface TimelineState {
   tracks: TimelineTrack[];
   clips: TimelineClip[];
   playhead: number;
   selectedClipId: string | null;
+  past: HistorySnapshot[];
+  future: HistorySnapshot[];
   setPlayhead: (time: number) => void;
   selectClip: (id: string | null) => void;
   addClip: (input: Omit<TimelineClip, "id"> & { id?: string }) => TimelineClip;
@@ -34,12 +60,17 @@ interface TimelineState {
   renameClip: (clipId: string, name: string) => void;
   duplicateClip: (clipId: string) => TimelineClip | null;
   setClipDuration: (clipId: string, duration: number) => void;
+  setClipSpeed: (clipId: string, speed: number) => void;
   clearTimeline: () => void;
   loadTimeline: (
     tracks: TimelineTrack[],
     clips: TimelineClip[],
     playhead?: number,
   ) => void;
+  undo: () => void;
+  redo: () => void;
+  canUndo: () => boolean;
+  canRedo: () => boolean;
 }
 
 function uid(prefix: string): string {
@@ -55,14 +86,35 @@ const initialTracks: TimelineTrack[] = [
   { id: "a1", name: "Audio 1", kind: "audio" },
 ];
 
-export const useTimelineStore = create<TimelineState>()((set) => ({
+const HISTORY_CAP = 50;
+
+function takeSnapshot(s: TimelineState): HistorySnapshot {
+  return {
+    tracks: s.tracks.map((t) => ({ ...t })),
+    clips: s.clips.map((c) => ({ ...c })),
+    playhead: s.playhead,
+    selectedClipId: s.selectedClipId,
+  };
+}
+
+function pushHistory(
+  s: TimelineState,
+  next: Partial<Pick<TimelineState, "tracks" | "clips" | "playhead" | "selectedClipId">>,
+): Partial<TimelineState> {
+  const snap = takeSnapshot(s);
+  const past = [...s.past, snap].slice(-HISTORY_CAP);
+  return { ...next, past, future: [] };
+}
+
+export const useTimelineStore = create<TimelineState>()((set, get) => ({
   tracks: initialTracks,
   clips: [],
   playhead: 0,
   selectedClipId: null,
+  past: [],
+  future: [],
 
-  setPlayhead: (time) =>
-    set({ playhead: Math.max(0, time) }),
+  setPlayhead: (time) => set({ playhead: Math.max(0, time) }),
 
   selectClip: (id) => set({ selectedClipId: id }),
 
@@ -74,8 +126,9 @@ export const useTimelineStore = create<TimelineState>()((set) => ({
       start: Math.max(0, input.start),
       duration: Math.max(0.1, input.duration),
       ...(input.src !== undefined ? { src: input.src } : {}),
+      speed: normalizeSpeed(input.speed),
     };
-    set((s) => ({ clips: [...s.clips, clip] }));
+    set((s) => pushHistory(s, { clips: [...s.clips, clip] }));
     return clip;
   },
 
@@ -92,42 +145,52 @@ export const useTimelineStore = create<TimelineState>()((set) => ({
         name: `${target.name} (2)`,
         start: at,
         duration: target.duration - offset,
+        speed: normalizeSpeed(target.speed),
       };
       created = right;
-      return {
+      return pushHistory(s, {
         clips: s.clips.flatMap((c) =>
           c.id === clipId
             ? [{ ...c, duration: offset }, right]
             : [c],
         ),
-      };
+      });
     });
     return created;
   },
 
   moveClip: (clipId, next) =>
-    set((s) => ({
-      clips: s.clips.map((c) =>
-        c.id === clipId
-          ? {
-              ...c,
-              trackId: next.trackId ?? c.trackId,
-              start: next.start !== undefined ? Math.max(0, next.start) : c.start,
-            }
-          : c,
-      ),
-    })),
+    set((s) => {
+      if (!s.clips.some((c) => c.id === clipId)) return s;
+      return pushHistory(s, {
+        clips: s.clips.map((c) =>
+          c.id === clipId
+            ? {
+                ...c,
+                trackId: next.trackId ?? c.trackId,
+                start: next.start !== undefined ? Math.max(0, next.start) : c.start,
+              }
+            : c,
+        ),
+      });
+    }),
 
   removeClip: (clipId) =>
-    set((s) => ({
-      clips: s.clips.filter((c) => c.id !== clipId),
-      selectedClipId: s.selectedClipId === clipId ? null : s.selectedClipId,
-    })),
+    set((s) => {
+      if (!s.clips.some((c) => c.id === clipId)) return s;
+      return pushHistory(s, {
+        clips: s.clips.filter((c) => c.id !== clipId),
+        selectedClipId: s.selectedClipId === clipId ? null : s.selectedClipId,
+      });
+    }),
 
   renameClip: (clipId, name) =>
-    set((s) => ({
-      clips: s.clips.map((c) => (c.id === clipId ? { ...c, name } : c)),
-    })),
+    set((s) => {
+      if (!s.clips.some((c) => c.id === clipId)) return s;
+      return pushHistory(s, {
+        clips: s.clips.map((c) => (c.id === clipId ? { ...c, name } : c)),
+      });
+    }),
 
   duplicateClip: (clipId) => {
     let created: TimelineClip | null = null;
@@ -141,19 +204,33 @@ export const useTimelineStore = create<TimelineState>()((set) => ({
         start: target.start + target.duration,
       };
       created = copy;
-      return { clips: [...s.clips, copy] };
+      return pushHistory(s, { clips: [...s.clips, copy] });
     });
     return created;
   },
 
   setClipDuration: (clipId, duration) =>
-    set((s) => ({
-      clips: s.clips.map((c) =>
-        c.id === clipId ? { ...c, duration: Math.max(0.1, duration) } : c,
-      ),
-    })),
+    set((s) => {
+      if (!s.clips.some((c) => c.id === clipId)) return s;
+      return pushHistory(s, {
+        clips: s.clips.map((c) =>
+          c.id === clipId ? { ...c, duration: Math.max(0.1, duration) } : c,
+        ),
+      });
+    }),
 
-  clearTimeline: () => set({ clips: [], playhead: 0, selectedClipId: null }),
+  setClipSpeed: (clipId, speed) =>
+    set((s) => {
+      if (!s.clips.some((c) => c.id === clipId)) return s;
+      return pushHistory(s, {
+        clips: s.clips.map((c) =>
+          c.id === clipId ? { ...c, speed: normalizeSpeed(speed) } : c,
+        ),
+      });
+    }),
+
+  clearTimeline: () =>
+    set((s) => pushHistory(s, { clips: [], playhead: 0, selectedClipId: null })),
 
   loadTimeline: (tracks, clips, playhead = 0) =>
     set({
@@ -161,7 +238,44 @@ export const useTimelineStore = create<TimelineState>()((set) => ({
       clips: clips.map((c) => ({ ...c })),
       playhead: Math.max(0, playhead),
       selectedClipId: null,
+      past: [],
+      future: [],
     }),
+
+  undo: () =>
+    set((s) => {
+      if (s.past.length === 0) return s;
+      const prev = s.past[s.past.length - 1];
+      if (!prev) return s;
+      const current = takeSnapshot(s);
+      return {
+        tracks: prev.tracks.map((t) => ({ ...t })),
+        clips: prev.clips.map((c) => ({ ...c })),
+        playhead: prev.playhead,
+        selectedClipId: prev.selectedClipId,
+        past: s.past.slice(0, -1),
+        future: [...s.future, current].slice(-HISTORY_CAP),
+      };
+    }),
+
+  redo: () =>
+    set((s) => {
+      if (s.future.length === 0) return s;
+      const next = s.future[s.future.length - 1];
+      if (!next) return s;
+      const current = takeSnapshot(s);
+      return {
+        tracks: next.tracks.map((t) => ({ ...t })),
+        clips: next.clips.map((c) => ({ ...c })),
+        playhead: next.playhead,
+        selectedClipId: next.selectedClipId,
+        past: [...s.past, current].slice(-HISTORY_CAP),
+        future: s.future.slice(0, -1),
+      };
+    }),
+
+  canUndo: () => get().past.length > 0,
+  canRedo: () => get().future.length > 0,
 }));
 
 export function clipsForTrack(clips: TimelineClip[], trackId: string): TimelineClip[] {
@@ -172,6 +286,11 @@ export function clipsForTrack(clips: TimelineClip[], trackId: string): TimelineC
 
 export function timelineDuration(clips: TimelineClip[]): number {
   return clips.reduce((max, c) => Math.max(max, c.start + c.duration), 0);
+}
+
+/** Effective playback rate for a clip (undefined => 1 for old projects). */
+export function clipSpeed(clip: Pick<TimelineClip, "speed">): number {
+  return normalizeSpeed(clip.speed);
 }
 
 export { clamp };

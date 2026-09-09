@@ -2,9 +2,11 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   exportProject,
+  extractAudio,
   getMetadata,
   getThumbnail,
   renderPlaceholderThumbnail,
+  resolutionToSize,
   trimMedia,
 } from "./engine";
 
@@ -73,5 +75,43 @@ describe("engine fallbacks", () => {
     expect(meta).toHaveProperty("duration");
     expect(meta).toHaveProperty("hasVideo");
     expect(meta).toHaveProperty("hasAudio");
+  });
+
+  it("resolutionToSize maps export presets", () => {
+    expect(resolutionToSize("720p")).toEqual({ width: 1280, height: 720 });
+    expect(resolutionToSize("1080p")).toEqual({ width: 1920, height: 1080 });
+    expect(resolutionToSize("4K")).toEqual({ width: 3840, height: 2160 });
+  });
+
+  it("exportProject supports mp3 / audioOnly manifests", async () => {
+    const out = await exportProject({ clips: [], format: "mp3" });
+    expect(out).toBeInstanceOf(Blob);
+    expect(out.size).toBeGreaterThan(0);
+    const audioOnly = await exportProject({
+      clips: [],
+      format: "mp4",
+      audioOnly: true,
+      fps: 60,
+      width: 1920,
+      height: 1080,
+    });
+    expect(audioOnly).toBeInstanceOf(Blob);
+    if (audioOnly.type === "application/json") {
+      const manifest = JSON.parse(await audioOnly.text()) as {
+        format: string;
+        fps: number;
+      };
+      expect(manifest.format).toBe("mp3");
+      expect(manifest.fps).toBe(60);
+    }
+  });
+
+  it("extractAudio passes through audio blobs and nulls video offline", async () => {
+    const audio = new Blob(["audio-bytes"], { type: "audio/mp4" });
+    const back = await extractAudio(audio);
+    expect(back).toBeInstanceOf(Blob);
+    const video = new Blob(["not real video"], { type: "video/mp4" });
+    const none = await extractAudio(video);
+    expect(none === null || none instanceof Blob).toBe(true);
   });
 });

@@ -1,7 +1,11 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  SPEED_MAX,
+  SPEED_MIN,
+  clipSpeed,
   clipsForTrack,
+  normalizeSpeed,
   timelineDuration,
   useTimelineStore,
 } from "./timeline";
@@ -148,5 +152,83 @@ describe("timeline store", () => {
     expect(clipsForTrack(clips, "v1").map((c) => c.name)).toEqual(["A", "B"]);
     expect(timelineDuration(clips)).toBeCloseTo(7);
     expect(timelineDuration([])).toBe(0);
+  });
+
+  it("addClip defaults speed to 1 and keeps old clips working", () => {
+    const clip = useTimelineStore
+      .getState()
+      .addClip({ trackId: "v1", name: "A", start: 0, duration: 2 });
+    expect(clip.speed).toBe(1);
+    expect(clipSpeed(clip)).toBe(1);
+    // Old persisted clips without a speed field still play at 1x.
+    expect(clipSpeed({})).toBe(1);
+    expect(clipSpeed({ speed: undefined })).toBe(1);
+    expect(normalizeSpeed(undefined)).toBe(1);
+  });
+
+  it("setClipSpeed clamps to 0.25x–4x", () => {
+    const clip = useTimelineStore
+      .getState()
+      .addClip({ trackId: "v1", name: "A", start: 0, duration: 2 });
+    useTimelineStore.getState().setClipSpeed(clip.id, 2);
+    expect(
+      useTimelineStore.getState().clips.find((c) => c.id === clip.id)?.speed,
+    ).toBe(2);
+    useTimelineStore.getState().setClipSpeed(clip.id, 99);
+    expect(
+      useTimelineStore.getState().clips.find((c) => c.id === clip.id)?.speed,
+    ).toBe(SPEED_MAX);
+    useTimelineStore.getState().setClipSpeed(clip.id, 0.01);
+    expect(
+      useTimelineStore.getState().clips.find((c) => c.id === clip.id)?.speed,
+    ).toBe(SPEED_MIN);
+  });
+
+  it("split and duplicate preserve speed", () => {
+    const clip = useTimelineStore.getState().addClip({
+      trackId: "v1",
+      name: "A",
+      start: 0,
+      duration: 8,
+      speed: 2,
+    });
+    const right = useTimelineStore.getState().splitClip(clip.id, 3);
+    expect(right?.speed).toBe(2);
+    const copy = useTimelineStore.getState().duplicateClip(clip.id);
+    expect(copy?.speed).toBe(2);
+  });
+
+  it("undo/redo restores mutations with canUndo/canRedo", () => {
+    const st = () => useTimelineStore.getState();
+    expect(st().canUndo()).toBe(false);
+    expect(st().canRedo()).toBe(false);
+    const clip = st().addClip({ trackId: "v1", name: "A", start: 0, duration: 2 });
+    expect(st().canUndo()).toBe(true);
+    st().renameClip(clip.id, "B");
+    expect(st().clips.find((c) => c.id === clip.id)?.name).toBe("B");
+    st().undo();
+    expect(st().clips.find((c) => c.id === clip.id)?.name).toBe("A");
+    expect(st().canRedo()).toBe(true);
+    st().redo();
+    expect(st().clips.find((c) => c.id === clip.id)?.name).toBe("B");
+    st().removeClip(clip.id);
+    expect(st().clips).toHaveLength(0);
+    st().undo();
+    expect(st().clips).toHaveLength(1);
+    st().redo();
+    expect(st().clips).toHaveLength(0);
+  });
+
+  it("new mutations clear the redo stack and history caps at 50", () => {
+    const st = () => useTimelineStore.getState();
+    st().addClip({ trackId: "v1", name: "A", start: 0, duration: 1 });
+    st().undo();
+    expect(st().canRedo()).toBe(true);
+    st().addClip({ trackId: "v1", name: "B", start: 0, duration: 1 });
+    expect(st().canRedo()).toBe(false);
+    for (let i = 0; i < 60; i++) {
+      st().addClip({ trackId: "v1", name: `C${i}`, start: i, duration: 1 });
+    }
+    expect(st().past.length).toBeLessThanOrEqual(50);
   });
 });
