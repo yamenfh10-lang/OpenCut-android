@@ -219,6 +219,56 @@ describe("timeline store", () => {
     expect(st().clips).toHaveLength(0);
   });
 
+  it("setClipFilter/setClipTransform normalize values", () => {
+    const st = () => useTimelineStore.getState();
+    const clip = st().addClip({ trackId: "v1", name: "A", start: 0, duration: 2 });
+    st().setClipFilter(clip.id, { brightness: 9, grayscale: 1 });
+    const f = st().clips.find((c) => c.id === clip.id)?.filter;
+    expect(f?.brightness).toBe(2);
+    expect(f?.grayscale).toBe(1);
+    st().setClipTransform(clip.id, { rotation: 45 as never, scale: 99 });
+    const t = st().clips.find((c) => c.id === clip.id)?.transform;
+    expect(t?.rotation).toBe(0);
+    expect(t?.scale).toBe(3);
+    st().setClipTransform(clip.id, { rotation: 90, flipH: true });
+    expect(st().clips.find((c) => c.id === clip.id)?.transform).toMatchObject({
+      rotation: 90,
+      flipH: true,
+    });
+  });
+
+  it("setClipColorLabel stores the label id", () => {
+    const st = () => useTimelineStore.getState();
+    const clip = st().addClip({ trackId: "v1", name: "A", start: 0, duration: 2 });
+    st().setClipColorLabel(clip.id, "red");
+    expect(st().clips.find((c) => c.id === clip.id)?.colorLabel).toBe("red");
+  });
+
+  it("markers add/rename/remove roundtrip with undo", () => {
+    const st = () => useTimelineStore.getState();
+    const m = st().addMarker({ time: 2.5, label: "Intro", color: "blue" });
+    expect(m.time).toBeCloseTo(2.5);
+    expect(st().markers).toHaveLength(1);
+    st().renameMarker(m.id, "Hook");
+    expect(st().markers[0]?.label).toBe("Hook");
+    st().undo();
+    expect(st().markers[0]?.label).toBe("Intro");
+    st().redo();
+    expect(st().markers[0]?.label).toBe("Hook");
+    st().removeMarker(m.id);
+    expect(st().markers).toHaveLength(0);
+    st().undo();
+    expect(st().markers).toHaveLength(1);
+  });
+
+  it("loadTimeline hydrates markers and clears history", () => {
+    const st = () => useTimelineStore.getState();
+    st().addClip({ trackId: "v1", name: "A", start: 0, duration: 1 });
+    st().loadTimeline([videoTrack], [], 0, [{ id: "m1", time: 1, label: "One", color: "red" }]);
+    expect(st().markers).toHaveLength(1);
+    expect(st().canUndo()).toBe(false);
+  });
+
   it("new mutations clear the redo stack and history caps at 50", () => {
     const st = () => useTimelineStore.getState();
     st().addClip({ trackId: "v1", name: "A", start: 0, duration: 1 });

@@ -18,6 +18,8 @@ export default function TextSheet({ onDone }: { onDone: () => void }) {
       name: `TEXT: ${title.slice(0, 40)}`,
       start,
       duration,
+      kind: "text",
+      text: title,
     });
     useTimelineStore.getState().selectClip(clip.id);
     setNote(`Added “${title}” at ${start.toFixed(1)}s.`);

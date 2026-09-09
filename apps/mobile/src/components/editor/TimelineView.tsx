@@ -3,6 +3,7 @@ import { Minus, Plus } from "lucide-react";
 import { palette, radii, spacing, typeScale } from "../../theme";
 import { clipsForTrack, timelineDuration, useTimelineStore } from "../../stores/timeline";
 import type { TimelineClip } from "../../stores/timeline";
+import { colorLabelColor, markerColor } from "../../lib/presets";
 import { hapticHeavy, hapticTick } from "../../lib/native";
 
 const PX_PER_SEC = 56;
@@ -78,6 +79,7 @@ function ClipCard({
   const [offsetX, setOffsetX] = useState(0);
   const [swiping, setSwiping] = useState(false);
   const startX = useRef(0);
+  const labelColor = colorLabelColor(clip.colorLabel);
 
   return (
     <div style={{ position: "relative", flexShrink: 0, width }}>
@@ -140,6 +142,7 @@ function ClipCard({
           padding: 6,
           borderRadius: radii.md,
           border: selected ? `2px solid ${palette.text}` : `1px solid ${palette.borderStrong}`,
+          borderTop: labelColor ? `4px solid ${labelColor}` : undefined,
           background: kind === "video" ? palette.cardElevated : "#221d19",
           color: palette.text,
           textAlign: "left",
@@ -177,6 +180,7 @@ interface TimelineViewProps {
 export default function TimelineView({ zoom, onZoomChange }: TimelineViewProps) {
   const tracks = useTimelineStore((s) => s.tracks);
   const clips = useTimelineStore((s) => s.clips);
+  const markers = useTimelineStore((s) => s.markers);
   const playhead = useTimelineStore((s) => s.playhead);
   const selectedClipId = useTimelineStore((s) => s.selectedClipId);
   const setPlayhead = useTimelineStore((s) => s.setPlayhead);
@@ -322,6 +326,31 @@ export default function TimelineView({ zoom, onZoomChange }: TimelineViewProps) 
             borderRadius: 2,
           }}
         />
+        {/* Marker diamonds (LumoCut-style): tap jumps the playhead */}
+        {markers.map((m) => (
+          <button
+            key={m.id}
+            type="button"
+            onClick={() => {
+              setPlayhead(m.time);
+              void hapticTick();
+            }}
+            aria-label={`Jump to marker ${m.label}`}
+            title={m.label}
+            style={{
+              position: "absolute",
+              left: `calc(${(Math.min(m.time, max) / max) * 100}% - 6px)`,
+              top: 1,
+              width: 12,
+              height: 12,
+              transform: "rotate(45deg)",
+              background: markerColor(m.color),
+              border: "1px solid rgba(0,0,0,0.5)",
+              borderRadius: 2,
+              padding: 0,
+            }}
+          />
+        ))}
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: spacing.sm, overflowY: "auto" }}>

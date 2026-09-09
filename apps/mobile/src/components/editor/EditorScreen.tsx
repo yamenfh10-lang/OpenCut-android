@@ -13,6 +13,8 @@ import type { ToolId } from "./ToolBar";
 import TimelineView from "./TimelineView";
 import ImportSheet from "./sheets/ImportSheet";
 import SpeedSheet from "./sheets/SpeedSheet";
+import AdjustSheet from "./sheets/AdjustSheet";
+import MarkersSheet from "./sheets/MarkersSheet";
 import TextSheet from "./sheets/TextSheet";
 import AudioSheet from "./sheets/AudioSheet";
 import ExportSheet from "./sheets/ExportSheet";
@@ -20,16 +22,19 @@ import ExportSheet from "./sheets/ExportSheet";
 interface EditorScreenProps {
   projectId: string;
   projectName: string;
+  projectAspect: string;
   onProjectNameChange: (name: string) => void;
   onBack: () => void;
   onEnterFullscreen: () => void;
 }
 
-type SheetId = "import" | "speed" | "text" | "audio" | "export" | null;
+type SheetId = "import" | "speed" | "adjust" | "markers" | "text" | "audio" | "export" | null;
 
 const sheetTitles: Record<Exclude<SheetId, null>, string> = {
   import: "Import media",
   speed: "Speed",
+  adjust: "Adjust clip",
+  markers: "Markers",
   text: "Add text",
   audio: "Audio",
   export: "Export",
@@ -38,6 +43,7 @@ const sheetTitles: Record<Exclude<SheetId, null>, string> = {
 export default function EditorScreen({
   projectId,
   projectName,
+  projectAspect,
   onProjectNameChange,
   onBack,
   onEnterFullscreen,
@@ -59,7 +65,7 @@ export default function EditorScreen({
         id: projectId,
         name: projectName,
         updatedAt: Date.now(),
-        timeline: { tracks: st.tracks, clips: st.clips, playhead: st.playhead },
+        timeline: { tracks: st.tracks, clips: st.clips, markers: st.markers, playhead: st.playhead },
         ...(existing ? {} : {}),
       });
     } catch {
@@ -87,6 +93,17 @@ export default function EditorScreen({
         if (!st.selectedClipId) break;
         setActiveTool("speed");
         setSheet("speed");
+        await hapticTick();
+        break;
+      case "adjust":
+        if (!st.selectedClipId) break;
+        setActiveTool("adjust");
+        setSheet("adjust");
+        await hapticTick();
+        break;
+      case "markers":
+        setActiveTool("markers");
+        setSheet("markers");
         await hapticTick();
         break;
       case "text":
@@ -197,9 +214,11 @@ export default function EditorScreen({
       >
         {sheet === "import" ? <ImportSheet onDone={closeSheet} /> : null}
         {sheet === "speed" ? <SpeedSheet /> : null}
+        {sheet === "adjust" ? <AdjustSheet onDone={closeSheet} /> : null}
+        {sheet === "markers" ? <MarkersSheet onDone={closeSheet} /> : null}
         {sheet === "text" ? <TextSheet onDone={closeSheet} /> : null}
         {sheet === "audio" ? <AudioSheet onDone={closeSheet} /> : null}
-        {sheet === "export" ? <ExportSheet onDone={closeSheet} /> : null}
+        {sheet === "export" ? <ExportSheet aspect={projectAspect} onDone={closeSheet} /> : null}
       </BottomSheet>
     </div>
   );

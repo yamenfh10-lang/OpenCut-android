@@ -14,6 +14,7 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>("home");
   const [projectId, setProjectId] = useState<string | null>(null);
   const [projectName, setProjectName] = useState("Untitled");
+  const [projectAspect, setProjectAspect] = useState("16:9");
   const [fullscreen, setFullscreen] = useState(false);
   // Bump to refresh the home draft list after returning from the editor.
   const [homeNonce, setHomeNonce] = useState(0);
@@ -25,6 +26,7 @@ export default function App() {
   function openProject(doc: ProjectDoc) {
     setProjectId(doc.id);
     setProjectName(doc.name);
+    setProjectAspect(doc.aspect ?? "16:9");
     setScreen("editor");
     setFullscreen(false);
   }
@@ -38,7 +40,7 @@ export default function App() {
           id: projectId,
           name: projectName,
           updatedAt: Date.now(),
-          timeline: { tracks: st.tracks, clips: st.clips, playhead: st.playhead },
+          timeline: { tracks: st.tracks, clips: st.clips, markers: st.markers, playhead: st.playhead },
         });
       } catch {
         // keep in-memory state; home will show last persisted list
@@ -58,7 +60,7 @@ export default function App() {
           id: projectId,
           name,
           updatedAt: Date.now(),
-          timeline: { tracks: st.tracks, clips: st.clips, playhead: st.playhead },
+          timeline: { tracks: st.tracks, clips: st.clips, markers: st.markers, playhead: st.playhead },
         });
       } catch {
         // ignore; rename still reflected in the app bar
@@ -84,6 +86,7 @@ export default function App() {
         <EditorScreen
           projectId={projectId}
           projectName={projectName}
+          projectAspect={projectAspect}
           onProjectNameChange={(n) => void handleRename(n)}
           onBack={() => void handleBack()}
           onEnterFullscreen={() => setFullscreen(true)}

@@ -1,15 +1,20 @@
 // IndexedDB persistence for OpenCut mobile. Written from scratch, no deps.
 // MIT-compatible; no GPL code.
 
-import type { TimelineClip, TimelineTrack } from "../stores/timeline";
+import type { TimelineClip, TimelineMarker, TimelineTrack } from "../stores/timeline";
+import type { ProjectAspect } from "./presets";
 
 export interface ProjectDoc {
   id: string;
   name: string;
   updatedAt: number;
+  /** CapCut-style canvas aspect. Optional for backwards compat (default 16:9). */
+  aspect?: ProjectAspect;
   timeline: {
     tracks: TimelineTrack[];
     clips: TimelineClip[];
+    /** Optional for backwards compat with docs saved before markers existed. */
+    markers?: TimelineMarker[];
     playhead: number;
   };
 }

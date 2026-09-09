@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
-import { Clapperboard, Film, Plus, Trash2 } from "lucide-react";
+import { Clapperboard, Film, LayoutTemplate, Plus, Trash2 } from "lucide-react";
 import { palette, radii, safe, spacing, typeScale } from "../../theme";
 import { hapticHeavy, hapticTick } from "../../lib/native";
 import { listProjects, loadProject, saveProject, deleteProject } from "../../lib/storage";
 import type { ProjectDoc } from "../../lib/storage";
+import { ASPECTS } from "../../lib/presets";
+import type { ProjectAspect } from "../../lib/presets";
+import { BUILTIN_TEMPLATES } from "../../lib/templates";
 import { timelineDuration } from "../../stores/timeline";
 import { useTimelineStore } from "../../stores/timeline";
 
@@ -87,6 +90,7 @@ export default function HomeScreen({ onOpen }: HomeScreenProps) {
   const [drafts, setDrafts] = useState<ProjectDoc[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [aspect, setAspect] = useState<ProjectAspect>("16:9");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const loadTimeline = useTimelineStore((s) => s.loadTimeline);
 
@@ -117,14 +121,15 @@ export default function HomeScreen({ onOpen }: HomeScreenProps) {
         id,
         name: `Untitled ${count}`,
         updatedAt: Date.now(),
-        timeline: { tracks: defaultTracks(), clips: [], playhead: 0 },
+        aspect,
+        timeline: { tracks: defaultTracks(), clips: [], markers: [], playhead: 0 },
       };
       try {
         await saveProject(doc);
       } catch {
         // Storage may be unavailable in some web contexts; still open in-memory.
       }
-      loadTimeline(doc.timeline.tracks, doc.timeline.clips, 0);
+      loadTimeline(doc.timeline.tracks, doc.timeline.clips, 0, doc.timeline.markers ?? []);
       const fresh = await loadProject(id).catch(() => null);
       onOpen(fresh ?? doc);
     } finally {
@@ -138,11 +143,44 @@ export default function HomeScreen({ onOpen }: HomeScreenProps) {
     try {
       const full = await loadProject(doc.id);
       const target = full ?? doc;
-      loadTimeline(target.timeline.tracks, target.timeline.clips, target.timeline.playhead);
+      loadTimeline(target.timeline.tracks, target.timeline.clips, target.timeline.playhead, target.timeline.markers ?? []);
       onOpen(target);
     } catch {
-      loadTimeline(doc.timeline.tracks, doc.timeline.clips, doc.timeline.playhead);
+      loadTimeline(doc.timeline.tracks, doc.timeline.clips, doc.timeline.playhead, doc.timeline.markers ?? []);
       onOpen(doc);
+    }
+  }
+
+  async function handleUseTemplate(templateId: string) {
+    const tpl = BUILTIN_TEMPLATES.find((t) => t.id === templateId);
+    if (!tpl || creating) return;
+    setCreating(true);
+    try {
+      await hapticTick();
+      const id = `proj_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+      const doc: ProjectDoc = {
+        id,
+        name: tpl.name,
+        updatedAt: Date.now(),
+        aspect: tpl.aspect,
+        timeline: {
+          tracks: tpl.tracks.map((t) => ({ ...t })),
+          clips: tpl.clips.map((c) => ({ ...c })),
+          markers: tpl.markers.map((m) => ({ ...m })),
+          playhead: 0,
+        },
+      };
+      try {
+        await saveProject(doc);
+      } catch {
+        // still open in-memory when storage is unavailable
+      }
+      loadTimeline(doc.timeline.tracks, doc.timeline.clips, 0, doc.timeline.markers ?? []);
+      const fresh = await loadProject(id).catch(() => null);
+      onOpen(fresh ?? doc);
+    } finally {
+      setCreating(false);
+      void refresh();
     }
   }
 
@@ -214,6 +252,116 @@ export default function HomeScreen({ onOpen }: HomeScreenProps) {
         <Plus size={20} strokeWidth={2.5} />
         {creating ? "Creating…" : "New Project"}
       </button>
+
+      <div>
+        <div style={{ fontSize: typeScale.caption, color: palette.muted, marginBottom: 6 }}>
+          Canvas
+        </div>
+        <div style={{ display: "flex", gap: spacing.sm }}>
+          {ASPECTS.map((a) => {
+            const active = aspect === a.id;
+            return (
+              <button
+                key={a.id}
+                type="button"
+                onClick={() => {
+                  setAspect(a.id);
+                  void hapticTick();
+                }}
+                aria-pressed={active}
+                aria-label={`New projects use ${a.label}`}
+                className="oc-spring"
+                style={{
+                  flex: 1,
+                  minHeight: 48,
+                  borderRadius: radii.md,
+                  border: active ? `2px solid ${palette.text}` : `1px solid ${palette.border}`,
+                  background: active ? palette.cardElevated : palette.card,
+                  color: palette.text,
+                  fontSize: 13,
+                  fontWeight: 700,
+                }}
+              >
+                {a.id}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
+        <strong style={{ fontSize: typeScale.title }}>Templates</strong>
+        <span style={{ fontSize: typeScale.caption, color: palette.faint }}>
+          Ready to edit
+        </span>
+      </div>
+
+      <div
+        role="list"
+        aria-label="Ready-made templates"
+        style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: spacing.md }}
+      >
+        {BUILTIN_TEMPLATES.map((t) => (
+          <div
+            key={t.id}
+            role="listitem"
+            style={{
+              borderRadius: radii.lg,
+              overflow: "hidden",
+              background: palette.surface,
+              border: `1px solid ${palette.border}`,
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => void handleUseTemplate(t.id)}
+              disabled={creating}
+              aria-label={`Use template ${t.name}`}
+              className="oc-spring"
+              style={{
+                display: "block",
+                width: "100%",
+                padding: 0,
+                border: "none",
+                background: "transparent",
+                textAlign: "left",
+                opacity: creating ? 0.6 : 1,
+              }}
+            >
+              <span
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  aspectRatio: "16 / 9",
+                  background: palette.card,
+                  gap: 6,
+                }}
+              >
+                <LayoutTemplate size={26} color={palette.muted} />
+                <span style={{ fontSize: 12, fontWeight: 800, color: palette.muted }}>
+                  {t.aspect}
+                </span>
+              </span>
+              <span style={{ display: "block", padding: spacing.sm }}>
+                <span style={{ display: "block", fontSize: typeScale.body, fontWeight: 700 }}>
+                  {t.name}
+                </span>
+                <span
+                  style={{
+                    display: "block",
+                    fontSize: typeScale.caption,
+                    color: palette.muted,
+                    marginTop: 2,
+                  }}
+                >
+                  {t.description}
+                </span>
+              </span>
+            </button>
+          </div>
+        ))}
+      </div>
 
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
         <strong style={{ fontSize: typeScale.title }}>Drafts</strong>

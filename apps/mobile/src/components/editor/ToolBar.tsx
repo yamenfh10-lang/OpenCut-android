@@ -1,8 +1,10 @@
 import {
   AudioLines,
   Camera,
+  Flag,
   Gauge,
   Scissors,
+  SlidersHorizontal,
   Trash2,
   Type,
   Upload,
@@ -10,7 +12,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { palette, radii, spacing, typeScale } from "../../theme";
 
-export type ToolId = "import" | "split" | "speed" | "text" | "audio" | "snapshot" | "delete";
+export type ToolId = "import" | "split" | "speed" | "adjust" | "markers" | "text" | "audio" | "snapshot" | "delete";
 
 interface ToolBarProps {
   activeTool: ToolId | null;
@@ -22,6 +24,8 @@ const tools: { id: ToolId; label: string; icon: LucideIcon }[] = [
   { id: "import", label: "Import", icon: Upload },
   { id: "split", label: "Split", icon: Scissors },
   { id: "speed", label: "Speed", icon: Gauge },
+  { id: "adjust", label: "Adjust", icon: SlidersHorizontal },
+  { id: "markers", label: "Markers", icon: Flag },
   { id: "text", label: "Text", icon: Type },
   { id: "audio", label: "Audio", icon: AudioLines },
   { id: "snapshot", label: "Snapshot", icon: Camera },
@@ -45,7 +49,7 @@ export default function ToolBar({ activeTool, onTool, hasSelection }: ToolBarPro
     >
       {tools.map((t) => {
         const Icon = t.icon;
-        const needsSelection = t.id === "split" || t.id === "speed" || t.id === "delete";
+        const needsSelection = t.id === "split" || t.id === "speed" || t.id === "adjust" || t.id === "delete";
         const disabled = needsSelection && !hasSelection;
         const active = activeTool === t.id;
         const danger = t.id === "delete";

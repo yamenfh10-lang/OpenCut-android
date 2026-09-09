@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
-import { Maximize2, Pause, Play } from "lucide-react";
+import { Maximize2, Pause, Play, StepBack, StepForward } from "lucide-react";
 import { palette, radii, spacing, typeScale } from "../../theme";
 import { clipSpeed, timelineDuration, useTimelineStore } from "../../stores/timeline";
+import { FRAME_STEP, cssFilter, cssTransform } from "../../lib/presets";
 import { hapticTick } from "../../lib/native";
 
 interface PreviewAreaProps {
@@ -67,6 +68,13 @@ export default function PreviewArea({ videoRef, onEnterFullscreen }: PreviewArea
     void hapticTick();
   }
 
+  function stepFrame(dir: 1 | -1) {
+    // Frame-accurate stepping (devhyper-style precise seeking, 30fps grid).
+    const stepped = Math.round((playhead + dir * FRAME_STEP) / FRAME_STEP) * FRAME_STEP;
+    setPlayhead(Math.max(0, Number(stepped.toFixed(3))));
+    void hapticTick();
+  }
+
   /** Tap toggles play; double-tap left/right seeks ∓5s. */
   function onTapZone(e: React.MouseEvent, side: "left" | "center" | "right") {
     const now = Date.now();
@@ -82,7 +90,7 @@ export default function PreviewArea({ videoRef, onEnterFullscreen }: PreviewArea
 
   return (
     <section aria-label="Preview" style={{ background: "#000", position: "relative" }}>
-      {!active?.src ? (
+      {!active || (!active.src && active.kind !== "text") ? (
         <div style={{ textAlign: "center", padding: "30px 16px" }}>
           <div style={{ fontSize: typeScale.caption, color: palette.muted, letterSpacing: 2 }}>
             PREVIEW
@@ -95,6 +103,56 @@ export default function PreviewArea({ videoRef, onEnterFullscreen }: PreviewArea
               ? "Import a clip to begin"
               : `${clips.length} clip(s) — tap Import below`}
           </div>
+        </div>
+      ) : active.kind === "text" ? (
+        <div style={{ position: "relative" }}>
+          <div
+            style={{
+              width: "100%",
+              aspectRatio: "16 / 9",
+              maxHeight: "32dvh",
+              background: "#000",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: spacing.lg,
+              filter: cssFilter(active.filter),
+              transform: cssTransform(active.transform),
+            }}
+          >
+            <span
+              style={{
+                fontSize: 26,
+                fontWeight: 800,
+                textAlign: "center",
+                color: "#fafafa",
+                textShadow: "0 2px 12px rgba(0,0,0,0.8)",
+              }}
+            >
+              {active.text || active.name}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onEnterFullscreen}
+            aria-label="Open fullscreen preview"
+            style={{
+              position: "absolute",
+              top: spacing.sm,
+              right: spacing.sm,
+              minHeight: 48,
+              minWidth: 48,
+              borderRadius: radii.md,
+              border: "1px solid rgba(255,255,255,0.25)",
+              background: "rgba(0,0,0,0.55)",
+              color: "#fff",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Maximize2 size={18} />
+          </button>
         </div>
       ) : (
         <div style={{ position: "relative" }}>
@@ -113,6 +171,8 @@ export default function PreviewArea({ videoRef, onEnterFullscreen }: PreviewArea
               background: "#000",
               display: "block",
               objectFit: "contain",
+              filter: active ? cssFilter(active.filter) : "none",
+              transform: active ? cssTransform(active.transform) : "none",
             }}
           />
           {/* Gesture layer: left 30% = -5s, right 30% = +5s, center = play/pause */}
@@ -206,6 +266,44 @@ export default function PreviewArea({ videoRef, onEnterFullscreen }: PreviewArea
               }}
             >
               {playhead.toFixed(1)}s / {duration.toFixed(1)}s
+            </span>
+            <span style={{ display: "flex", gap: 4, pointerEvents: "auto" }}>
+              <button
+                type="button"
+                onClick={() => stepFrame(-1)}
+                aria-label="Step back one frame"
+                style={{
+                  minHeight: 40,
+                  minWidth: 40,
+                  borderRadius: 8,
+                  border: "1px solid rgba(255,255,255,0.25)",
+                  background: "rgba(0,0,0,0.6)",
+                  color: "#fff",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <StepBack size={16} />
+              </button>
+              <button
+                type="button"
+                onClick={() => stepFrame(1)}
+                aria-label="Step forward one frame"
+                style={{
+                  minHeight: 40,
+                  minWidth: 40,
+                  borderRadius: 8,
+                  border: "1px solid rgba(255,255,255,0.25)",
+                  background: "rgba(0,0,0,0.6)",
+                  color: "#fff",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <StepForward size={16} />
+              </button>
             </span>
           </div>
           <button

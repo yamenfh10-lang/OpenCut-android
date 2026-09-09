@@ -11,7 +11,7 @@ const resolutions: ExportResolution[] = ["720p", "1080p", "4K"];
 const fpsOptions = [30, 60];
 const formats: Format[] = ["mp4", "webm"];
 
-export default function ExportSheet({ onDone }: { onDone: () => void }) {
+export default function ExportSheet({ aspect, onDone }: { aspect: string; onDone: () => void }) {
   const [resolution, setResolution] = useState<ExportResolution>("1080p");
   const [fps, setFps] = useState(30);
   const [format, setFormat] = useState<Format>("mp4");
@@ -27,10 +27,14 @@ export default function ExportSheet({ onDone }: { onDone: () => void }) {
     setStatus("Rendering…");
     try {
       const st = useTimelineStore.getState();
-      const { width, height } = resolutionToSize(resolution);
+      let { width, height } = resolutionToSize(resolution);
+      if (aspect === "9:16") [width, height] = [height, width];
+      else if (aspect === "1:1") width = height = Math.min(width, height);
       const { exportProject } = await import("../../../lib/engine");
       const blob = await exportProject({
         clips: st.clips,
+        markers: st.markers,
+        aspect,
         format: audioOnly ? "mp3" : format,
         width,
         height,
@@ -89,7 +93,9 @@ export default function ExportSheet({ onDone }: { onDone: () => void }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: spacing.md }}>
       <div>
-        <div style={{ fontSize: 13, color: palette.muted, marginBottom: 6 }}>Resolution</div>
+        <div style={{ fontSize: 13, color: palette.muted, marginBottom: 6 }}>
+          Resolution · canvas {aspect}
+        </div>
         <div style={{ display: "flex", gap: spacing.sm }}>
           {resolutions.map((r) =>
             chip({ value: r, current: resolution, label: r, onPick: setResolution }),

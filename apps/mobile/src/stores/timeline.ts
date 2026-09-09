@@ -1,4 +1,6 @@
 import { create } from "zustand";
+import type { ClipFilter, ClipTransform } from "../lib/presets";
+import { normalizeFilter, normalizeTransform } from "../lib/presets";
 
 // Written from scratch for OpenCut mobile. Inspired by the Clypra-style
 // normalized timeline (tracks reference clips by id), no GPL code copied.
@@ -21,6 +23,21 @@ export interface TimelineClip {
   kind?: "video" | "audio" | "text";
   /** Overlay text for `kind === "text"` title cards. Optional, backwards compatible. */
   text?: string;
+  /** Color grade (LumoCut-style per-clip filter). Optional, defaults to neutral. */
+  filter?: ClipFilter;
+  /** Rotate / flip / scale (devhyper-style transform). Optional, defaults to identity. */
+  transform?: ClipTransform;
+  /** Color label id from COLOR_LABELS. Optional, "none" by default. */
+  colorLabel?: string;
+}
+
+export interface TimelineMarker {
+  id: string;
+  /** Time on the timeline, in seconds. */
+  time: number;
+  label: string;
+  /** MarkerColorId from MARKER_COLORS. */
+  color: string;
 }
 
 export interface TimelineTrack {
@@ -40,6 +57,7 @@ export function normalizeSpeed(speed: unknown): number {
 export interface HistorySnapshot {
   tracks: TimelineTrack[];
   clips: TimelineClip[];
+  markers: TimelineMarker[];
   playhead: number;
   selectedClipId: string | null;
 }
@@ -47,6 +65,7 @@ export interface HistorySnapshot {
 interface TimelineState {
   tracks: TimelineTrack[];
   clips: TimelineClip[];
+  markers: TimelineMarker[];
   playhead: number;
   selectedClipId: string | null;
   past: HistorySnapshot[];
@@ -61,11 +80,18 @@ interface TimelineState {
   duplicateClip: (clipId: string) => TimelineClip | null;
   setClipDuration: (clipId: string, duration: number) => void;
   setClipSpeed: (clipId: string, speed: number) => void;
+  setClipFilter: (clipId: string, filter: Partial<ClipFilter>) => void;
+  setClipTransform: (clipId: string, transform: Partial<ClipTransform>) => void;
+  setClipColorLabel: (clipId: string, colorLabel: string) => void;
+  addMarker: (input: { time: number; label?: string; color?: string }) => TimelineMarker;
+  removeMarker: (markerId: string) => void;
+  renameMarker: (markerId: string, label: string) => void;
   clearTimeline: () => void;
   loadTimeline: (
     tracks: TimelineTrack[],
     clips: TimelineClip[],
     playhead?: number,
+    markers?: TimelineMarker[],
   ) => void;
   undo: () => void;
   redo: () => void;
@@ -91,7 +117,8 @@ const HISTORY_CAP = 50;
 function takeSnapshot(s: TimelineState): HistorySnapshot {
   return {
     tracks: s.tracks.map((t) => ({ ...t })),
-    clips: s.clips.map((c) => ({ ...c })),
+    clips: s.clips.map((c) => ({ ...c, filter: c.filter ? { ...c.filter } : undefined, transform: c.transform ? { ...c.transform } : undefined })),
+    markers: s.markers.map((m) => ({ ...m })),
     playhead: s.playhead,
     selectedClipId: s.selectedClipId,
   };
@@ -99,7 +126,7 @@ function takeSnapshot(s: TimelineState): HistorySnapshot {
 
 function pushHistory(
   s: TimelineState,
-  next: Partial<Pick<TimelineState, "tracks" | "clips" | "playhead" | "selectedClipId">>,
+  next: Partial<Pick<TimelineState, "tracks" | "clips" | "markers" | "playhead" | "selectedClipId">>,
 ): Partial<TimelineState> {
   const snap = takeSnapshot(s);
   const past = [...s.past, snap].slice(-HISTORY_CAP);
@@ -109,6 +136,7 @@ function pushHistory(
 export const useTimelineStore = create<TimelineState>()((set, get) => ({
   tracks: initialTracks,
   clips: [],
+  markers: [],
   playhead: 0,
   selectedClipId: null,
   past: [],
@@ -229,13 +257,68 @@ export const useTimelineStore = create<TimelineState>()((set, get) => ({
       });
     }),
 
+  setClipFilter: (clipId, filter) =>
+    set((s) => {
+      if (!s.clips.some((c) => c.id === clipId)) return s;
+      return pushHistory(s, {
+        clips: s.clips.map((c) =>
+          c.id === clipId ? { ...c, filter: normalizeFilter(filter) } : c,
+        ),
+      });
+    }),
+
+  setClipTransform: (clipId, transform) =>
+    set((s) => {
+      if (!s.clips.some((c) => c.id === clipId)) return s;
+      return pushHistory(s, {
+        clips: s.clips.map((c) =>
+          c.id === clipId ? { ...c, transform: normalizeTransform(transform) } : c,
+        ),
+      });
+    }),
+
+  setClipColorLabel: (clipId, colorLabel) =>
+    set((s) => {
+      if (!s.clips.some((c) => c.id === clipId)) return s;
+      return pushHistory(s, {
+        clips: s.clips.map((c) => (c.id === clipId ? { ...c, colorLabel } : c)),
+      });
+    }),
+
+  addMarker: (input) => {
+    const marker: TimelineMarker = {
+      id: uid("marker"),
+      time: Math.max(0, input.time),
+      label: (input.label ?? "").slice(0, 60) || `Marker ${input.time.toFixed(1)}s`,
+      color: input.color ?? "red",
+    };
+    set((s) => pushHistory(s, { markers: [...s.markers, marker] }));
+    return marker;
+  },
+
+  removeMarker: (markerId) =>
+    set((s) => {
+      if (!s.markers.some((m) => m.id === markerId)) return s;
+      return pushHistory(s, { markers: s.markers.filter((m) => m.id !== markerId) });
+    }),
+
+  renameMarker: (markerId, label) =>
+    set((s) => {
+      if (!s.markers.some((m) => m.id === markerId)) return s;
+      const name = label.slice(0, 60) || "Marker";
+      return pushHistory(s, {
+        markers: s.markers.map((m) => (m.id === markerId ? { ...m, label: name } : m)),
+      });
+    }),
+
   clearTimeline: () =>
     set((s) => pushHistory(s, { clips: [], playhead: 0, selectedClipId: null })),
 
-  loadTimeline: (tracks, clips, playhead = 0) =>
+  loadTimeline: (tracks, clips, playhead = 0, markers = []) =>
     set({
       tracks: tracks.map((t) => ({ ...t })),
       clips: clips.map((c) => ({ ...c })),
+      markers: markers.map((m) => ({ ...m })),
       playhead: Math.max(0, playhead),
       selectedClipId: null,
       past: [],
@@ -251,6 +334,7 @@ export const useTimelineStore = create<TimelineState>()((set, get) => ({
       return {
         tracks: prev.tracks.map((t) => ({ ...t })),
         clips: prev.clips.map((c) => ({ ...c })),
+        markers: prev.markers.map((m) => ({ ...m })),
         playhead: prev.playhead,
         selectedClipId: prev.selectedClipId,
         past: s.past.slice(0, -1),
@@ -267,6 +351,7 @@ export const useTimelineStore = create<TimelineState>()((set, get) => ({
       return {
         tracks: next.tracks.map((t) => ({ ...t })),
         clips: next.clips.map((c) => ({ ...c })),
+        markers: next.markers.map((m) => ({ ...m })),
         playhead: next.playhead,
         selectedClipId: next.selectedClipId,
         past: [...s.past, current].slice(-HISTORY_CAP),

@@ -26,6 +26,18 @@ export interface ExportClipLike {
   duration: number;
   src?: string;
   speed?: number;
+  kind?: string;
+  text?: string;
+  filter?: { brightness: number; contrast: number; saturation: number; grayscale: number; sepia: number; invert: number };
+  transform?: { rotation: number; flipH: boolean; flipV: boolean; scale: number };
+  colorLabel?: string;
+}
+
+export interface ExportMarkerLike {
+  id: string;
+  time: number;
+  label: string;
+  color: string;
 }
 
 export type { ExportResolution } from "./exportPresets";
@@ -33,6 +45,8 @@ export { resolutionToSize } from "./exportPresets";
 
 export interface ExportProjectOptions {
   clips: ExportClipLike[];
+  markers?: ExportMarkerLike[];
+  aspect?: string;
   format: "mp4" | "webm" | "mp3";
   onProgress?: (progress: number) => void;
   width?: number;
@@ -459,6 +473,7 @@ export async function exportProject(opts: ExportProjectOptions): Promise<Blob> {
     version: 1,
     format,
     createdAt: new Date().toISOString(),
+    aspect: opts.aspect ?? "16:9",
     width: opts.width ?? 1280,
     height: opts.height ?? 720,
     fps: opts.fps ?? 30,
@@ -475,6 +490,17 @@ export async function exportProject(opts: ExportProjectOptions): Promise<Blob> {
       duration: c.duration,
       src: c.src ?? null,
       speed: c.speed ?? 1,
+      kind: c.kind ?? "video",
+      text: c.text ?? null,
+      filter: c.filter ?? null,
+      transform: c.transform ?? null,
+      colorLabel: c.colorLabel ?? "none",
+    })),
+    markers: (opts.markers ?? []).map((m) => ({
+      id: m.id,
+      time: m.time,
+      label: m.label,
+      color: m.color,
     })),
     note: "manifest fallback: mediabunny render unavailable in this environment",
   };
