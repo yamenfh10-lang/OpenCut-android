@@ -1,6 +1,6 @@
 import { create } from "zustand";
-import type { ClipFilter, ClipTransform } from "../lib/presets";
-import { normalizeFilter, normalizeTransform } from "../lib/presets";
+import type { ClipFilter, ClipTransform, CropPresetId } from "../lib/presets";
+import { normalizeCrop, normalizeFade, normalizeFilter, normalizeTransform, normalizeVolume } from "../lib/presets";
 
 // Written from scratch for OpenCut mobile. Inspired by the Clypra-style
 // normalized timeline (tracks reference clips by id), no GPL code copied.
@@ -29,6 +29,13 @@ export interface TimelineClip {
   transform?: ClipTransform;
   /** Color label id from COLOR_LABELS. Optional, "none" by default. */
   colorLabel?: string;
+  /** Crop preset id from CROP_PRESETS (devhyper-style crop). Optional, "none". */
+  crop?: CropPresetId;
+  /** Volume gain 0..2 (devhyper-style audio level). Optional, default 1. */
+  volume?: number;
+  /** Fade in/out in seconds. Optional, default 0. */
+  fadeIn?: number;
+  fadeOut?: number;
 }
 
 export interface TimelineMarker {
@@ -83,6 +90,9 @@ interface TimelineState {
   setClipFilter: (clipId: string, filter: Partial<ClipFilter>) => void;
   setClipTransform: (clipId: string, transform: Partial<ClipTransform>) => void;
   setClipColorLabel: (clipId: string, colorLabel: string) => void;
+  setClipCrop: (clipId: string, crop: string) => void;
+  setClipVolume: (clipId: string, volume: number) => void;
+  setClipFade: (clipId: string, fade: { fadeIn?: number; fadeOut?: number }) => void;
   addMarker: (input: { time: number; label?: string; color?: string }) => TimelineMarker;
   removeMarker: (markerId: string) => void;
   renameMarker: (markerId: string, label: string) => void;
@@ -282,6 +292,42 @@ export const useTimelineStore = create<TimelineState>()((set, get) => ({
       if (!s.clips.some((c) => c.id === clipId)) return s;
       return pushHistory(s, {
         clips: s.clips.map((c) => (c.id === clipId ? { ...c, colorLabel } : c)),
+      });
+    }),
+
+  setClipCrop: (clipId, crop) =>
+    set((s) => {
+      if (!s.clips.some((c) => c.id === clipId)) return s;
+      return pushHistory(s, {
+        clips: s.clips.map((c) =>
+          c.id === clipId ? { ...c, crop: normalizeCrop(crop) } : c,
+        ),
+      });
+    }),
+
+  setClipVolume: (clipId, volume) =>
+    set((s) => {
+      if (!s.clips.some((c) => c.id === clipId)) return s;
+      return pushHistory(s, {
+        clips: s.clips.map((c) =>
+          c.id === clipId ? { ...c, volume: normalizeVolume(volume) } : c,
+        ),
+      });
+    }),
+
+  setClipFade: (clipId, fade) =>
+    set((s) => {
+      if (!s.clips.some((c) => c.id === clipId)) return s;
+      return pushHistory(s, {
+        clips: s.clips.map((c) =>
+          c.id === clipId
+            ? {
+                ...c,
+                fadeIn: fade.fadeIn !== undefined ? normalizeFade(fade.fadeIn) : c.fadeIn,
+                fadeOut: fade.fadeOut !== undefined ? normalizeFade(fade.fadeOut) : c.fadeOut,
+              }
+            : c,
+        ),
       });
     }),
 

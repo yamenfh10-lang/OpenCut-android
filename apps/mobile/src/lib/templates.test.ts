@@ -5,12 +5,16 @@ import {
   FILTER_PRESETS,
   aspectRatio,
   colorLabelColor,
+  cropRatio,
   cssFilter,
   cssTransform,
   isDefaultFilter,
   markerColor,
+  normalizeCrop,
+  normalizeFade,
   normalizeFilter,
   normalizeTransform,
+  normalizeVolume,
   snapToFrame,
 } from "./presets";
 
@@ -70,5 +74,18 @@ describe("presets", () => {
     expect(snapToFrame(0.1)).toBeCloseTo(0.1, 3);
     expect(snapToFrame(0.11)).toBeCloseTo(0.1, 3);
     expect(snapToFrame(1)).toBe(1);
+  });
+
+  it("crop/volume/fade normalize safely", () => {
+    expect(normalizeCrop("9:16")).toBe("9:16");
+    expect(normalizeCrop("bogus")).toBe("none");
+    expect(cropRatio("1:1")).toBe("1 / 1");
+    expect(cropRatio(undefined)).toBeNull();
+    expect(normalizeVolume(0)).toBe(0);
+    expect(normalizeVolume(99)).toBe(2);
+    expect(normalizeVolume(undefined)).toBe(1);
+    expect(normalizeFade(2.5)).toBeCloseTo(2.5);
+    expect(normalizeFade(-1)).toBe(0);
+    expect(normalizeFade(99)).toBe(10);
   });
 });

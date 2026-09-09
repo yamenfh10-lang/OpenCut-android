@@ -199,3 +199,34 @@ export const FRAME_STEP = 1 / FRAME_RATE;
 export function snapToFrame(time: number, fps = FRAME_RATE): number {
   return Math.round(time * fps) / fps;
 }
+
+/** Per-clip crop presets (devhyper-style crop). "none" keeps source framing. */
+export const CROP_PRESETS = [
+  { id: "none", label: "None", ratio: null },
+  { id: "16:9", label: "16:9", ratio: "16 / 9" },
+  { id: "9:16", label: "9:16", ratio: "9 / 16" },
+  { id: "1:1", label: "1:1", ratio: "1 / 1" },
+  { id: "4:3", label: "4:3", ratio: "4 / 3" },
+] as const;
+
+export type CropPresetId = (typeof CROP_PRESETS)[number]["id"];
+
+export function normalizeCrop(input: unknown): CropPresetId {
+  return CROP_PRESETS.some((c) => c.id === input) ? (input as CropPresetId) : "none";
+}
+
+export function cropRatio(id: string | undefined): string | null {
+  return CROP_PRESETS.find((c) => c.id === id)?.ratio ?? null;
+}
+
+/** Volume 0..2 (0 mute, 1 normal, up to 2x boost for export gain). */
+export function normalizeVolume(input: unknown): number {
+  const n = typeof input === "number" && Number.isFinite(input) ? input : 1;
+  return Math.min(2, Math.max(0, n));
+}
+
+/** Fade seconds, clamped 0..10. */
+export function normalizeFade(input: unknown): number {
+  const n = typeof input === "number" && Number.isFinite(input) ? input : 0;
+  return Math.min(10, Math.max(0, n));
+}

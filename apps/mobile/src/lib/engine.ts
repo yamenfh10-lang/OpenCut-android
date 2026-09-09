@@ -31,6 +31,10 @@ export interface ExportClipLike {
   filter?: { brightness: number; contrast: number; saturation: number; grayscale: number; sepia: number; invert: number };
   transform?: { rotation: number; flipH: boolean; flipV: boolean; scale: number };
   colorLabel?: string;
+  crop?: string;
+  volume?: number;
+  fadeIn?: number;
+  fadeOut?: number;
 }
 
 export interface ExportMarkerLike {
@@ -53,6 +57,8 @@ export interface ExportProjectOptions {
   height?: number;
   fps?: number;
   audioOnly?: boolean;
+  /** HDR→SDR tone mapping request (devhyper-style convert). */
+  sdrToneMap?: boolean;
 }
 
 
@@ -478,6 +484,7 @@ export async function exportProject(opts: ExportProjectOptions): Promise<Blob> {
     height: opts.height ?? 720,
     fps: opts.fps ?? 30,
     audioOnly: opts.audioOnly ?? format === "mp3",
+    sdrToneMap: opts.sdrToneMap ?? false,
     duration: opts.clips.reduce(
       (max, c) => Math.max(max, c.start + c.duration),
       0,
@@ -495,6 +502,10 @@ export async function exportProject(opts: ExportProjectOptions): Promise<Blob> {
       filter: c.filter ?? null,
       transform: c.transform ?? null,
       colorLabel: c.colorLabel ?? "none",
+      crop: c.crop ?? "none",
+      volume: c.volume ?? 1,
+      fadeIn: c.fadeIn ?? 0,
+      fadeOut: c.fadeOut ?? 0,
     })),
     markers: (opts.markers ?? []).map((m) => ({
       id: m.id,

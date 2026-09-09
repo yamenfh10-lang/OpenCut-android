@@ -269,6 +269,24 @@ describe("timeline store", () => {
     expect(st().canUndo()).toBe(false);
   });
 
+  it("crop/volume/fade actions clamp and persist with undo", () => {
+    const st = () => useTimelineStore.getState();
+    const clip = st().addClip({ trackId: "v1", name: "A", start: 0, duration: 2 });
+    st().setClipCrop(clip.id, "9:16");
+    expect(st().clips.find((c) => c.id === clip.id)?.crop).toBe("9:16");
+    st().setClipCrop(clip.id, "bogus");
+    expect(st().clips.find((c) => c.id === clip.id)?.crop).toBe("none");
+    st().setClipVolume(clip.id, 0);
+    expect(st().clips.find((c) => c.id === clip.id)?.volume).toBe(0);
+    st().setClipVolume(clip.id, 99);
+    expect(st().clips.find((c) => c.id === clip.id)?.volume).toBe(2);
+    st().setClipFade(clip.id, { fadeIn: 1.5, fadeOut: -2 });
+    expect(st().clips.find((c) => c.id === clip.id)?.fadeIn).toBeCloseTo(1.5);
+    expect(st().clips.find((c) => c.id === clip.id)?.fadeOut).toBe(0);
+    st().undo();
+    expect(st().clips.find((c) => c.id === clip.id)?.fadeIn).toBeUndefined();
+  });
+
   it("new mutations clear the redo stack and history caps at 50", () => {
     const st = () => useTimelineStore.getState();
     st().addClip({ trackId: "v1", name: "A", start: 0, duration: 1 });

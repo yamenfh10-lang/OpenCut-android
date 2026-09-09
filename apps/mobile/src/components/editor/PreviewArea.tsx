@@ -3,7 +3,7 @@ import type { RefObject } from "react";
 import { Maximize2, Pause, Play, StepBack, StepForward } from "lucide-react";
 import { palette, radii, spacing, typeScale } from "../../theme";
 import { clipSpeed, timelineDuration, useTimelineStore } from "../../stores/timeline";
-import { FRAME_STEP, cssFilter, cssTransform } from "../../lib/presets";
+import { FRAME_STEP, cropRatio, cssFilter, cssTransform, normalizeVolume } from "../../lib/presets";
 import { hapticTick } from "../../lib/native";
 
 interface PreviewAreaProps {
@@ -23,17 +23,26 @@ export default function PreviewArea({ videoRef, onEnterFullscreen }: PreviewArea
     clips.find((c) => playhead >= c.start && playhead < c.start + c.duration) ?? null;
   const active = selected ?? underPlayhead ?? clips[0] ?? null;
   const speed = active ? clipSpeed(active) : 1;
+  const crop = active ? cropRatio(active.crop) : null;
 
   const [playing, setPlaying] = useState(false);
   const lastTap = useRef(0);
 
-  // Keep element in sync with the global playhead + per-clip speed.
+  // Keep element in sync with the global playhead + per-clip speed/volume.
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
     if (Math.abs(v.playbackRate - speed) > 0.01) {
       try {
         v.playbackRate = speed;
+      } catch {
+        // ignore
+      }
+    }
+    const vol = active ? Math.min(1, normalizeVolume(active.volume)) : 1;
+    if (Math.abs(v.volume - vol) > 0.01) {
+      try {
+        v.volume = vol;
       } catch {
         // ignore
       }
@@ -156,6 +165,22 @@ export default function PreviewArea({ videoRef, onEnterFullscreen }: PreviewArea
         </div>
       ) : (
         <div style={{ position: "relative" }}>
+          <div
+            style={
+              crop
+                ? {
+                    width: "100%",
+                    aspectRatio: crop,
+                    maxHeight: "32dvh",
+                    overflow: "hidden",
+                    background: "#000",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }
+                : undefined
+            }
+          >
           <video
             ref={videoRef}
             src={active.src}
@@ -166,15 +191,17 @@ export default function PreviewArea({ videoRef, onEnterFullscreen }: PreviewArea
             onEnded={() => setPlaying(false)}
             style={{
               width: "100%",
-              aspectRatio: "16 / 9",
-              maxHeight: "32dvh",
+              height: crop ? "100%" : undefined,
+              aspectRatio: crop ? undefined : "16 / 9",
+              maxHeight: crop ? undefined : "32dvh",
               background: "#000",
               display: "block",
-              objectFit: "contain",
+              objectFit: crop ? "cover" : "contain",
               filter: active ? cssFilter(active.filter) : "none",
               transform: active ? cssTransform(active.transform) : "none",
             }}
           />
+          </div>
           {/* Gesture layer: left 30% = -5s, right 30% = +5s, center = play/pause */}
           <div style={{ position: "absolute", inset: 0, display: "flex" }} aria-hidden={false}>
             <button

@@ -7,8 +7,8 @@ import { hapticNotify, hapticTick, shareOrDownload } from "../../../lib/native";
 
 type Format = "mp4" | "webm";
 
-const resolutions: ExportResolution[] = ["720p", "1080p", "4K"];
-const fpsOptions = [30, 60];
+const resolutions: ExportResolution[] = ["480p", "720p", "1080p", "4K"];
+const fpsOptions = [24, 25, 30, 50, 60];
 const formats: Format[] = ["mp4", "webm"];
 
 export default function ExportSheet({ aspect, onDone }: { aspect: string; onDone: () => void }) {
@@ -16,6 +16,7 @@ export default function ExportSheet({ aspect, onDone }: { aspect: string; onDone
   const [fps, setFps] = useState(30);
   const [format, setFormat] = useState<Format>("mp4");
   const [audioOnly, setAudioOnly] = useState(false);
+  const [sdrToneMap, setSdrToneMap] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
   const [status, setStatus] = useState("Choose quality, then export.");
   const [busy, setBusy] = useState(false);
@@ -40,6 +41,7 @@ export default function ExportSheet({ aspect, onDone }: { aspect: string; onDone
         height,
         fps,
         audioOnly,
+        sdrToneMap,
         onProgress: (p) => setProgress(p),
       });
       const ext = blob.type === "application/json" ? "json" : audioOnly ? "mp3" : format;
@@ -151,6 +153,34 @@ export default function ExportSheet({ aspect, onDone }: { aspect: string; onDone
         <span>Audio-only MP3</span>
         <span style={{ fontSize: typeScale.caption, color: palette.muted }}>
           {audioOnly ? "ON" : "OFF"}
+        </span>
+      </button>
+
+      <button
+        type="button"
+        role="switch"
+        aria-checked={sdrToneMap}
+        onClick={() => {
+          setSdrToneMap((v) => !v);
+          void hapticTick();
+        }}
+        style={{
+          minHeight: 48,
+          borderRadius: radii.md,
+          border: sdrToneMap ? `2px solid ${palette.text}` : `1px solid ${palette.border}`,
+          background: palette.card,
+          color: palette.text,
+          fontSize: 14,
+          fontWeight: 700,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "0 14px",
+        }}
+      >
+        <span>HDR → SDR tone map</span>
+        <span style={{ fontSize: typeScale.caption, color: palette.muted }}>
+          {sdrToneMap ? "ON" : "OFF"}
         </span>
       </button>
 

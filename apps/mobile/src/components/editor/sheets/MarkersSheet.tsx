@@ -11,6 +11,7 @@ export default function MarkersSheet({ onDone }: { onDone: () => void }) {
   const setPlayhead = useTimelineStore((s) => s.setPlayhead);
   const [label, setLabel] = useState("");
   const [color, setColor] = useState<string>("red");
+  const [jumpTo, setJumpTo] = useState("");
 
   const sorted = [...markers].sort((a, b) => a.time - b.time);
 
@@ -81,6 +82,51 @@ export default function MarkersSheet({ onDone }: { onDone: () => void }) {
             }}
           />
         ))}
+      </div>
+
+      <div style={{ display: "flex", gap: spacing.sm }}>
+        <input
+          type="number"
+          min={0}
+          step={0.1}
+          value={jumpTo}
+          onChange={(e) => setJumpTo(e.target.value)}
+          placeholder="Go to seconds…"
+          aria-label="Jump to time in seconds"
+          style={{
+            flex: 1,
+            minHeight: 48,
+            borderRadius: radii.md,
+            border: `1px solid ${palette.borderStrong}`,
+            background: palette.card,
+            color: palette.text,
+            padding: "0 12px",
+            fontSize: 15,
+            fontVariantNumeric: "tabular-nums",
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => {
+            const t = Number(jumpTo);
+            if (Number.isFinite(t) && t >= 0) {
+              setPlayhead(t);
+              void hapticTick();
+            }
+          }}
+          aria-label="Jump to time"
+          style={{
+            minHeight: 48,
+            padding: "0 16px",
+            borderRadius: radii.md,
+            border: `1px solid ${palette.borderStrong}`,
+            background: palette.cardElevated,
+            color: palette.text,
+            fontWeight: 700,
+          }}
+        >
+          Go
+        </button>
       </div>
 
       {sorted.length === 0 ? (

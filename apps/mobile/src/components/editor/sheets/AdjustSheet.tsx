@@ -2,9 +2,11 @@ import { useState } from "react";
 import { palette, radii, spacing } from "../../../theme";
 import {
   COLOR_LABELS,
+  CROP_PRESETS,
   FILTER_PRESETS,
   normalizeFilter,
   normalizeTransform,
+  normalizeVolume,
 } from "../../../lib/presets";
 import { useTimelineStore } from "../../../stores/timeline";
 import { hapticTick } from "../../../lib/native";
@@ -27,6 +29,8 @@ export default function AdjustSheet({ onDone }: { onDone: () => void }) {
   const st = useTimelineStore.getState();
   const filter = normalizeFilter(selected.filter);
   const transform = normalizeTransform(selected.transform);
+  const volume = normalizeVolume(selected.volume);
+  const crop = selected.crop ?? "none";
 
   const numInput = (value: string, fallback: number): number => {
     const n = Number(value);
@@ -209,6 +213,44 @@ export default function AdjustSheet({ onDone }: { onDone: () => void }) {
           st.setClipTransform(selected.id, { ...transform, scale: v });
           void hapticTick();
         }, (v) => `${Math.round(v * 100)}%`)}
+      </div>
+
+      <div>
+        <div style={sectionTitle}>Crop</div>
+        <div style={{ display: "flex", gap: spacing.sm, flexWrap: "wrap" }}>
+          {CROP_PRESETS.map((c) => {
+            const active = crop === c.id;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => {
+                  st.setClipCrop(selected.id, c.id);
+                  void hapticTick();
+                }}
+                aria-pressed={active}
+                style={chipStyle(active)}
+              >
+                {c.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: spacing.md }}>
+        {slider("Volume", volume, 0, 2, 0.05, (v) => {
+          st.setClipVolume(selected.id, v);
+          void hapticTick();
+        }, (v) => (v === 0 ? "Muted" : `${Math.round(v * 100)}%`))}
+        {slider("Fade in", selected.fadeIn ?? 0, 0, 5, 0.1, (v) => {
+          st.setClipFade(selected.id, { fadeIn: v });
+          void hapticTick();
+        }, (v) => `${v.toFixed(1)}s`)}
+        {slider("Fade out", selected.fadeOut ?? 0, 0, 5, 0.1, (v) => {
+          st.setClipFade(selected.id, { fadeOut: v });
+          void hapticTick();
+        }, (v) => `${v.toFixed(1)}s`)}
       </div>
 
       <div>
