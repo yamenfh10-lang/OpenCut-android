@@ -9,11 +9,16 @@ import {
   cssFilter,
   cssTransform,
   isDefaultFilter,
+  layoutBox,
   markerColor,
   normalizeCrop,
   normalizeFade,
   normalizeFilter,
+  normalizeLayout,
+  normalizeShape,
+  normalizeShapeColor,
   normalizeTransform,
+  normalizeTransition,
   normalizeVolume,
   snapToFrame,
 } from "./presets";
@@ -87,5 +92,17 @@ describe("presets", () => {
     expect(normalizeFade(2.5)).toBeCloseTo(2.5);
     expect(normalizeFade(-1)).toBe(0);
     expect(normalizeFade(99)).toBe(10);
+  });
+
+  it("transitions/layouts/shapes normalize safely", () => {
+    expect(normalizeTransition({ type: "dissolve", duration: 9 }).duration).toBe(2);
+    expect(normalizeTransition({ type: "bogus" as never }).type).toBe("none");
+    expect(normalizeLayout("pip-br")).toBe("pip-br");
+    expect(normalizeLayout("bogus")).toBe("full");
+    expect(layoutBox("left")).toMatchObject({ left: "0%", width: "50%" });
+    expect(normalizeShape("heart")).toBe("heart");
+    expect(normalizeShape("bogus")).toBe("rect");
+    expect(normalizeShapeColor("#ff0000")).toBe("#ff0000");
+    expect(normalizeShapeColor("red")).toBe("#fafafa");
   });
 });

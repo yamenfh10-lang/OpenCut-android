@@ -62,6 +62,7 @@ export default function ExportSheet({ aspect, onDone }: { aspect: string; onDone
       const blob = await exportProject({
         clips: st.clips,
         markers: st.markers,
+        tracks: st.tracks.map((t) => ({ id: t.id, name: t.name, kind: t.kind, muted: t.muted === true })),
         aspect,
         format: audioOnly ? "mp3" : format,
         width,

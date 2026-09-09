@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { Minus, Plus } from "lucide-react";
+import { Lock, LockOpen, Minus, Plus, Volume2, VolumeX } from "lucide-react";
 import { palette, radii, spacing, typeScale } from "../../theme";
 import { clipsForTrack, timelineDuration, useTimelineStore } from "../../stores/timeline";
 import type { TimelineClip } from "../../stores/timeline";
-import { colorLabelColor, markerColor } from "../../lib/presets";
+import { colorLabelColor, markerColor, normalizeShape, normalizeShapeColor } from "../../lib/presets";
 import { hapticHeavy, hapticTick } from "../../lib/native";
+import ShapeArt from "./ShapeArt";
 
 const PX_PER_SEC = 56;
 
@@ -82,6 +83,28 @@ function ClipThumb({ clip }: { clip: TimelineClip }) {
       />
     );
   }
+  if (clip.kind === "shape") {
+    return (
+      <div
+        aria-hidden
+        style={{
+          width: "100%",
+          height: 34,
+          borderRadius: 6,
+          background: "#000",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <ShapeArt
+          shape={normalizeShape(clip.shape)}
+          color={normalizeShapeColor(clip.shapeColor)}
+          size={26}
+        />
+      </div>
+    );
+  }
   return (
     <div
       aria-hidden
@@ -105,6 +128,7 @@ function ClipThumb({ clip }: { clip: TimelineClip }) {
 function ClipCard({
   clip,
   kind,
+  locked,
   selected,
   width,
   onSelect,
@@ -112,6 +136,7 @@ function ClipCard({
 }: {
   clip: TimelineClip;
   kind: "video" | "audio";
+  locked: boolean;
   selected: boolean;
   width: number;
   onSelect: () => void;
@@ -164,7 +189,7 @@ function ClipCard({
         }}
         onTouchEnd={() => {
           setSwiping(false);
-          if (offsetX < -72) {
+          if (offsetX < -72 && !locked) {
             setOffsetX(0);
             void (async () => {
               await hapticHeavy();
@@ -227,6 +252,8 @@ export default function TimelineView({ zoom, onZoomChange }: TimelineViewProps) 
   const setPlayhead = useTimelineStore((s) => s.setPlayhead);
   const selectClip = useTimelineStore((s) => s.selectClip);
   const removeClip = useTimelineStore((s) => s.removeClip);
+  const toggleTrackMute = useTimelineStore((s) => s.toggleTrackMute);
+  const toggleTrackLock = useTimelineStore((s) => s.toggleTrackLock);
 
   const duration = timelineDuration(clips);
   const max = Math.max(duration, 5);
@@ -397,10 +424,40 @@ export default function TimelineView({ zoom, onZoomChange }: TimelineViewProps) 
       <div style={{ display: "flex", flexDirection: "column", gap: spacing.sm, overflowY: "auto" }}>
         {tracks.map((t) => {
           const lane = clipsForTrack(clips, t.id);
+          const muted = t.muted === true;
+          const locked = t.locked === true;
           return (
             <div key={t.id}>
-              <div style={{ fontSize: typeScale.caption, color: palette.muted, marginBottom: 4 }}>
-                {t.name}
+              <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 4 }}>
+                <span style={{ fontSize: typeScale.caption, color: palette.muted, flex: 1 }}>
+                  {t.name}
+                  {locked ? " · locked" : ""}
+                  {muted ? " · muted" : ""}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    toggleTrackMute(t.id);
+                    void hapticTick();
+                  }}
+                  aria-pressed={muted}
+                  aria-label={`${muted ? "Unmute" : "Mute"} track ${t.name}`}
+                  style={trackIconBtn}
+                >
+                  {muted ? <VolumeX size={15} /> : <Volume2 size={15} />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    toggleTrackLock(t.id);
+                    void hapticTick();
+                  }}
+                  aria-pressed={locked}
+                  aria-label={`${locked ? "Unlock" : "Lock"} track ${t.name}`}
+                  style={trackIconBtn}
+                >
+                  {locked ? <Lock size={15} /> : <LockOpen size={15} />}
+                </button>
               </div>
               <div
                 className="oc-lane"
@@ -418,6 +475,7 @@ export default function TimelineView({ zoom, onZoomChange }: TimelineViewProps) 
                     key={c.id}
                     clip={c}
                     kind={t.kind}
+                    locked={locked}
                     selected={selectedClipId === c.id}
                     width={Math.max(120, c.duration * PX_PER_SEC)}
                     onSelect={() => {
@@ -443,3 +501,15 @@ export default function TimelineView({ zoom, onZoomChange }: TimelineViewProps) 
     </section>
   );
 }
+
+const trackIconBtn: React.CSSProperties = {
+  minHeight: 40,
+  minWidth: 40,
+  borderRadius: 10,
+  border: "1px solid #27272a",
+  background: "#1b1b1f",
+  color: "#d4d4d8",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+};

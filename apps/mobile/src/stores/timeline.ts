@@ -1,6 +1,6 @@
 import { create } from "zustand";
-import type { ClipFilter, ClipTransform, CropPresetId } from "../lib/presets";
-import { normalizeCrop, normalizeFade, normalizeFilter, normalizeTransform, normalizeVolume } from "../lib/presets";
+import type { ClipFilter, ClipTransform, ClipTransition, CropPresetId, LayoutId, ShapeId } from "../lib/presets";
+import { normalizeCrop, normalizeFade, normalizeFilter, normalizeLayout, normalizeShape, normalizeShapeColor, normalizeTransform, normalizeTransition, normalizeVolume } from "../lib/presets";
 
 // Written from scratch for OpenCut mobile. Inspired by the Clypra-style
 // normalized timeline (tracks reference clips by id), no GPL code copied.
@@ -20,7 +20,7 @@ export interface TimelineClip {
    * Clip media kind. Optional for backwards compat; treat undefined as
    * "video" (old projects only had video/audio tracks and no text cards).
    */
-  kind?: "video" | "audio" | "text" | "image";
+  kind?: "video" | "audio" | "text" | "image" | "shape";
   /** Overlay text for `kind === "text"` title cards. Optional, backwards compatible. */
   text?: string;
   /** Color grade (LumoCut-style per-clip filter). Optional, defaults to neutral. */
@@ -36,6 +36,13 @@ export interface TimelineClip {
   /** Fade in/out in seconds. Optional, default 0. */
   fadeIn?: number;
   fadeOut?: number;
+  /** Incoming transition (CapCut-style). Optional. */
+  transition?: ClipTransition;
+  /** PIP / split-screen layout. Optional, default "full". */
+  layout?: LayoutId;
+  /** Sticker shape for `kind === "shape"`. Optional. */
+  shape?: ShapeId;
+  shapeColor?: string;
 }
 
 export interface TimelineMarker {
@@ -51,6 +58,10 @@ export interface TimelineTrack {
   id: string;
   name: string;
   kind: "video" | "audio";
+  /** Muted tracks play silent (preview) and flag the manifest. */
+  muted?: boolean;
+  /** Locked tracks reject structural edits (move/split/remove). */
+  locked?: boolean;
 }
 
 export const SPEED_MIN = 0.25;
@@ -93,6 +104,12 @@ interface TimelineState {
   setClipCrop: (clipId: string, crop: string) => void;
   setClipVolume: (clipId: string, volume: number) => void;
   setClipFade: (clipId: string, fade: { fadeIn?: number; fadeOut?: number }) => void;
+  setClipTransition: (clipId: string, transition: Partial<ClipTransition>) => void;
+  setClipLayout: (clipId: string, layout: string) => void;
+  setClipShape: (clipId: string, shape: { shape?: string; shapeColor?: string }) => void;
+  toggleTrackMute: (trackId: string) => void;
+  toggleTrackLock: (trackId: string) => void;
+  rippleDeleteClip: (clipId: string) => void;
   addMarker: (input: { time: number; label?: string; color?: string }) => TimelineMarker;
   removeMarker: (markerId: string) => void;
   renameMarker: (markerId: string, label: string) => void;
@@ -123,6 +140,16 @@ const initialTracks: TimelineTrack[] = [
 ];
 
 const HISTORY_CAP = 50;
+
+function trackOf(s: TimelineState, clipId: string): TimelineTrack | undefined {
+  const clip = s.clips.find((c) => c.id === clipId);
+  if (!clip) return undefined;
+  return s.tracks.find((t) => t.id === clip.trackId);
+}
+
+function isLocked(s: TimelineState, clipId: string): boolean {
+  return trackOf(s, clipId)?.locked === true;
+}
 
 function takeSnapshot(s: TimelineState): HistorySnapshot {
   return {
@@ -173,6 +200,7 @@ export const useTimelineStore = create<TimelineState>()((set, get) => ({
   splitClip: (clipId, at) => {
     let created: TimelineClip | null = null;
     set((s) => {
+      if (isLocked(s, clipId)) return s;
       const target = s.clips.find((c) => c.id === clipId);
       if (!target) return s;
       const offset = at - target.start;
@@ -199,6 +227,7 @@ export const useTimelineStore = create<TimelineState>()((set, get) => ({
 
   moveClip: (clipId, next) =>
     set((s) => {
+      if (isLocked(s, clipId)) return s;
       if (!s.clips.some((c) => c.id === clipId)) return s;
       return pushHistory(s, {
         clips: s.clips.map((c) =>
@@ -215,6 +244,7 @@ export const useTimelineStore = create<TimelineState>()((set, get) => ({
 
   removeClip: (clipId) =>
     set((s) => {
+      if (isLocked(s, clipId)) return s;
       if (!s.clips.some((c) => c.id === clipId)) return s;
       return pushHistory(s, {
         clips: s.clips.filter((c) => c.id !== clipId),
@@ -328,6 +358,74 @@ export const useTimelineStore = create<TimelineState>()((set, get) => ({
               }
             : c,
         ),
+      });
+    }),
+
+  setClipTransition: (clipId, transition) =>
+    set((s) => {
+      if (!s.clips.some((c) => c.id === clipId)) return s;
+      return pushHistory(s, {
+        clips: s.clips.map((c) =>
+          c.id === clipId ? { ...c, transition: normalizeTransition(transition) } : c,
+        ),
+      });
+    }),
+
+  setClipLayout: (clipId, layout) =>
+    set((s) => {
+      if (!s.clips.some((c) => c.id === clipId)) return s;
+      return pushHistory(s, {
+        clips: s.clips.map((c) =>
+          c.id === clipId ? { ...c, layout: normalizeLayout(layout) } : c,
+        ),
+      });
+    }),
+
+  setClipShape: (clipId, shape) =>
+    set((s) => {
+      if (!s.clips.some((c) => c.id === clipId)) return s;
+      return pushHistory(s, {
+        clips: s.clips.map((c) =>
+          c.id === clipId
+            ? {
+                ...c,
+                ...(shape.shape !== undefined ? { shape: normalizeShape(shape.shape) } : {}),
+                ...(shape.shapeColor !== undefined
+                  ? { shapeColor: normalizeShapeColor(shape.shapeColor) }
+                  : {}),
+              }
+            : c,
+        ),
+      });
+    }),
+
+  toggleTrackMute: (trackId) =>
+    set((s) => ({
+      tracks: s.tracks.map((t) => (t.id === trackId ? { ...t, muted: !(t.muted === true) } : t)),
+    })),
+
+  toggleTrackLock: (trackId) =>
+    set((s) => ({
+      tracks: s.tracks.map((t) => (t.id === trackId ? { ...t, locked: !(t.locked === true) } : t)),
+    })),
+
+  rippleDeleteClip: (clipId) =>
+    set((s) => {
+      // Remove the clip and close the gap: later clips on the same track
+      // shift left by the removed duration.
+      if (isLocked(s, clipId)) return s;
+      const target = s.clips.find((c) => c.id === clipId);
+      if (!target) return s;
+      const end = target.start + target.duration;
+      return pushHistory(s, {
+        clips: s.clips
+          .filter((c) => c.id !== clipId)
+          .map((c) =>
+            c.trackId === target.trackId && c.start >= end
+              ? { ...c, start: Math.max(target.start, c.start - target.duration) }
+              : c,
+          ),
+        selectedClipId: s.selectedClipId === clipId ? null : s.selectedClipId,
       });
     }),
 

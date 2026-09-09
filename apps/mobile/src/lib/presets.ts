@@ -230,3 +230,125 @@ export function normalizeFade(input: unknown): number {
   const n = typeof input === "number" && Number.isFinite(input) ? input : 0;
   return Math.min(10, Math.max(0, n));
 }
+
+/** Incoming clip transitions (CapCut-style). Preview-grade + manifest data. */
+export const TRANSITIONS = [
+  { id: "none", label: "None" },
+  { id: "dissolve", label: "Dissolve" },
+  { id: "wipe", label: "Wipe" },
+  { id: "slide", label: "Slide" },
+  { id: "fade-black", label: "Fade black" },
+  { id: "zoom", label: "Zoom" },
+] as const;
+
+export type TransitionType = (typeof TRANSITIONS)[number]["id"];
+
+export interface ClipTransition {
+  type: TransitionType;
+  /** Seconds, 0.2..2. */
+  duration: number;
+}
+
+export function normalizeTransition(input: Partial<ClipTransition> | undefined): ClipTransition {
+  const t = input ?? {};
+  const type = TRANSITIONS.some((x) => x.id === t.type) ? (t.type as TransitionType) : "none";
+  const duration =
+    typeof t.duration === "number" && Number.isFinite(t.duration)
+      ? Math.min(2, Math.max(0.2, t.duration))
+      : 0.5;
+  return { type, duration };
+}
+
+/** PIP / split-screen layouts (CapCut-style overlays). */
+export const LAYOUTS = [
+  { id: "full", label: "Full" },
+  { id: "left", label: "Left" },
+  { id: "right", label: "Right" },
+  { id: "pip-tl", label: "PIP TL" },
+  { id: "pip-tr", label: "PIP TR" },
+  { id: "pip-bl", label: "PIP BL" },
+  { id: "pip-br", label: "PIP BR" },
+  { id: "center", label: "Center" },
+] as const;
+
+export type LayoutId = (typeof LAYOUTS)[number]["id"];
+
+export function normalizeLayout(input: unknown): LayoutId {
+  return LAYOUTS.some((l) => l.id === input) ? (input as LayoutId) : "full";
+}
+
+export interface LayoutBox {
+  top: string;
+  left: string;
+  width: string;
+  height: string;
+}
+
+/** Absolute box for a layout inside a 16:9 stage. */
+export function layoutBox(layout: LayoutId): LayoutBox {
+  switch (layout) {
+    case "left":
+      return { top: "0%", left: "0%", width: "50%", height: "100%" };
+    case "right":
+      return { top: "0%", left: "50%", width: "50%", height: "100%" };
+    case "pip-tl":
+      return { top: "4%", left: "3%", width: "32%", height: "32%" };
+    case "pip-tr":
+      return { top: "4%", left: "65%", width: "32%", height: "32%" };
+    case "pip-bl":
+      return { top: "64%", left: "3%", width: "32%", height: "32%" };
+    case "pip-br":
+      return { top: "64%", left: "65%", width: "32%", height: "32%" };
+    case "center":
+      return { top: "20%", left: "20%", width: "60%", height: "60%" };
+    case "full":
+    default:
+      return { top: "0%", left: "0%", width: "100%", height: "100%" };
+  }
+}
+
+/** Sticker shapes rendered as inline SVG overlays. */
+export const SHAPES = [
+  { id: "rect", label: "Square" },
+  { id: "circle", label: "Circle" },
+  { id: "star", label: "Star" },
+  { id: "arrow", label: "Arrow" },
+  { id: "heart", label: "Heart" },
+] as const;
+
+export type ShapeId = (typeof SHAPES)[number]["id"];
+
+export function normalizeShape(input: unknown): ShapeId {
+  return SHAPES.some((s) => s.id === input) ? (input as ShapeId) : "rect";
+}
+
+export const SHAPE_COLORS = ["#fafafa", "#f87171", "#fbbf24", "#34d399", "#60a5fa", "#c084fc"] as const;
+
+export function normalizeShapeColor(input: unknown): string {
+  return typeof input === "string" && /^#[0-9a-fA-F]{6}$/.test(input) ? input : "#fafafa";
+}
+
+/** Recently-used filter preset ids (localStorage, AdjustSheet). */
+const RECENT_FX_KEY = "oc_recent_fx_v1";
+
+export function readRecentFx(): string[] {
+  try {
+    const raw = globalThis.localStorage?.getItem(RECENT_FX_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw) as unknown;
+    if (!Array.isArray(arr)) return [];
+    return arr.filter((x): x is string => typeof x === "string").slice(0, 5);
+  } catch {
+    return [];
+  }
+}
+
+export function pushRecentFx(id: string): string[] {
+  const next = [id, ...readRecentFx().filter((x) => x !== id)].slice(0, 5);
+  try {
+    globalThis.localStorage?.setItem(RECENT_FX_KEY, JSON.stringify(next));
+  } catch {
+    // ignore
+  }
+  return next;
+}

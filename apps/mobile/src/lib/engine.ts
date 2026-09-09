@@ -35,6 +35,10 @@ export interface ExportClipLike {
   volume?: number;
   fadeIn?: number;
   fadeOut?: number;
+  transition?: { type: string; duration: number };
+  layout?: string;
+  shape?: string;
+  shapeColor?: string;
 }
 
 export interface ExportMarkerLike {
@@ -50,6 +54,7 @@ export { resolutionToSize } from "./exportPresets";
 export interface ExportProjectOptions {
   clips: ExportClipLike[];
   markers?: ExportMarkerLike[];
+  tracks?: { id: string; name: string; kind: string; muted: boolean }[];
   aspect?: string;
   format: "mp4" | "webm" | "mp3";
   onProgress?: (progress: number) => void;
@@ -506,6 +511,16 @@ export async function exportProject(opts: ExportProjectOptions): Promise<Blob> {
       volume: c.volume ?? 1,
       fadeIn: c.fadeIn ?? 0,
       fadeOut: c.fadeOut ?? 0,
+      transition: c.transition ?? { type: "none", duration: 0.5 },
+      layout: c.layout ?? "full",
+      shape: c.shape ?? null,
+      shapeColor: c.shapeColor ?? null,
+    })),
+    tracks: (opts.tracks ?? []).map((t) => ({
+      id: t.id,
+      name: t.name,
+      kind: t.kind,
+      muted: t.muted,
     })),
     markers: (opts.markers ?? []).map((m) => ({
       id: m.id,

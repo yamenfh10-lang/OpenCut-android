@@ -4,12 +4,19 @@ import {
   COLOR_LABELS,
   CROP_PRESETS,
   FILTER_PRESETS,
+  LAYOUTS,
+  TRANSITIONS,
   normalizeFilter,
   normalizeTransform,
   normalizeVolume,
+  pushRecentFx,
+  readRecentFx,
 } from "../../../lib/presets";
 import { useTimelineStore } from "../../../stores/timeline";
 import { hapticTick } from "../../../lib/native";
+
+// Module-level FX clipboard (copy/paste effects between clips, LumoCut-style).
+let fxClipboard: { filter: ReturnType<typeof normalizeFilter>; transform: ReturnType<typeof normalizeTransform> } | null = null;
 
 // Per-clip adjust: rename, trim, LumoCut-style filter presets + sliders,
 // devhyper-style rotate/flip/scale, and color label. All offline-first.
@@ -21,6 +28,7 @@ export default function AdjustSheet({ onDone }: { onDone: () => void }) {
   const [name, setName] = useState<string | null>(null);
   const [startStr, setStartStr] = useState<string | null>(null);
   const [durStr, setDurStr] = useState<string | null>(null);
+  const [recent, setRecent] = useState<string[]>(() => readRecentFx());
 
   if (!selected) {
     return <p style={{ fontSize: 14, color: palette.muted }}>Select a clip first, then adjust it.</p>;
@@ -122,6 +130,37 @@ export default function AdjustSheet({ onDone }: { onDone: () => void }) {
 
       <div>
         <div style={sectionTitle}>Filter presets</div>
+        {recent.length > 0 ? (
+          <div style={{ display: "flex", gap: spacing.sm, flexWrap: "wrap", marginBottom: spacing.sm }}>
+            {recent.map((id) => {
+              const p = FILTER_PRESETS.find((x) => x.id === id);
+              if (!p) return null;
+              return (
+                <button
+                  key={`recent-${p.id}`}
+                  type="button"
+                  onClick={() => {
+                    st.setClipFilter(selected.id, p.filter);
+                    void hapticTick();
+                  }}
+                  aria-label={`Recent filter ${p.label}`}
+                  style={{
+                    minHeight: 48,
+                    padding: "0 14px",
+                    borderRadius: radii.full,
+                    border: `1px solid ${palette.borderStrong}`,
+                    background: palette.cardElevated,
+                    color: palette.text,
+                    fontWeight: 700,
+                    fontSize: 13,
+                  }}
+                >
+                  ⟳ {p.label}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
         <div style={{ display: "flex", gap: spacing.sm, flexWrap: "wrap" }}>
           {FILTER_PRESETS.map((p) => {
             const active =
@@ -137,6 +176,7 @@ export default function AdjustSheet({ onDone }: { onDone: () => void }) {
                 type="button"
                 onClick={() => {
                   st.setClipFilter(selected.id, p.filter);
+                  setRecent(pushRecentFx(p.id));
                   void hapticTick();
                 }}
                 aria-pressed={active}
@@ -279,6 +319,101 @@ export default function AdjustSheet({ onDone }: { onDone: () => void }) {
               />
             );
           })}
+        </div>
+      </div>
+
+      <div>
+        <div style={sectionTitle}>Transition in</div>
+        <div style={{ display: "flex", gap: spacing.sm, flexWrap: "wrap" }}>
+          {TRANSITIONS.map((t) => {
+            const active = (selected.transition?.type ?? "none") === t.id;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => {
+                  st.setClipTransition(selected.id, { type: t.id });
+                  void hapticTick();
+                }}
+                aria-pressed={active}
+                style={chipStyle(active)}
+              >
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div>
+        {slider("Transition length", selected.transition?.duration ?? 0.5, 0.2, 2, 0.1, (v) => {
+          st.setClipTransition(selected.id, { duration: v });
+          void hapticTick();
+        }, (v) => `${v.toFixed(1)}s`)}
+      </div>
+
+      <div>
+        <div style={sectionTitle}>Layout (PIP / split)</div>
+        <div style={{ display: "flex", gap: spacing.sm, flexWrap: "wrap" }}>
+          {LAYOUTS.map((l) => {
+            const active = (selected.layout ?? "full") === l.id;
+            return (
+              <button
+                key={l.id}
+                type="button"
+                onClick={() => {
+                  st.setClipLayout(selected.id, l.id);
+                  void hapticTick();
+                }}
+                aria-pressed={active}
+                style={chipStyle(active)}
+              >
+                {l.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div>
+        <div style={sectionTitle}>Effects</div>
+        <div style={{ display: "flex", gap: spacing.sm }}>
+          <button
+            type="button"
+            onClick={() => {
+              fxClipboard = { filter: normalizeFilter(selected.filter), transform: normalizeTransform(selected.transform) };
+              void hapticTick();
+            }}
+            style={{ ...chipStyle(false), flex: 1 }}
+          >
+            Copy FX
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (!fxClipboard) return;
+              st.setClipFilter(selected.id, fxClipboard.filter);
+              st.setClipTransform(selected.id, fxClipboard.transform);
+              void hapticTick();
+            }}
+            disabled={!fxClipboard}
+            aria-label="Paste copied effects"
+            style={{ ...chipStyle(false), flex: 1, opacity: fxClipboard ? 1 : 0.4 }}
+          >
+            Paste FX
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              st.rippleDeleteClip(selected.id);
+              void hapticTick();
+              onDone();
+            }}
+            aria-label="Delete clip and close the gap"
+            style={{ ...chipStyle(false), flex: 1, color: palette.danger, border: `1px solid ${palette.dangerBorder}` }}
+          >
+            Ripple del
+          </button>
         </div>
       </div>
 

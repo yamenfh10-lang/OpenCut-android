@@ -269,8 +269,7 @@ describe("timeline store", () => {
     expect(st().canUndo()).toBe(false);
   });
 
-  it("crop/volume/fade actions clamp and persist with undo", () => {
-    const st = () => useTimelineStore.getState();
+  it("crop/volume/fade actions clamp and persist with undo", () => {    const st = () => useTimelineStore.getState();
     const clip = st().addClip({ trackId: "v1", name: "A", start: 0, duration: 2 });
     st().setClipCrop(clip.id, "9:16");
     expect(st().clips.find((c) => c.id === clip.id)?.crop).toBe("9:16");
@@ -298,5 +297,57 @@ describe("timeline store", () => {
       st().addClip({ trackId: "v1", name: `C${i}`, start: i, duration: 1 });
     }
     expect(st().past.length).toBeLessThanOrEqual(50);
+  });
+
+  it("transition/layout/shape actions normalize", () => {
+    const st = () => useTimelineStore.getState();
+    const clip = st().addClip({ trackId: "v1", name: "A", start: 0, duration: 2 });
+    st().setClipTransition(clip.id, { type: "dissolve", duration: 9 });
+    expect(st().clips.find((c) => c.id === clip.id)?.transition).toMatchObject({
+      type: "dissolve",
+      duration: 2,
+    });
+    st().setClipTransition(clip.id, { type: "bogus" as never });
+    expect(st().clips.find((c) => c.id === clip.id)?.transition?.type).toBe("none");
+    st().setClipLayout(clip.id, "pip-br");
+    expect(st().clips.find((c) => c.id === clip.id)?.layout).toBe("pip-br");
+    st().setClipLayout(clip.id, "bogus");
+    expect(st().clips.find((c) => c.id === clip.id)?.layout).toBe("full");
+    st().setClipShape(clip.id, { shape: "star", shapeColor: "#ff0000" });
+    expect(st().clips.find((c) => c.id === clip.id)?.shape).toBe("star");
+    expect(st().clips.find((c) => c.id === clip.id)?.shapeColor).toBe("#ff0000");
+  });
+
+  it("track lock blocks structural edits, mute toggles", () => {
+    const st = () => useTimelineStore.getState();
+    const clip = st().addClip({ trackId: "v1", name: "A", start: 0, duration: 4 });
+    st().toggleTrackLock("v1");
+    expect(st().tracks.find((t) => t.id === "v1")?.locked).toBe(true);
+    st().moveClip(clip.id, { start: 5 });
+    expect(st().clips.find((c) => c.id === clip.id)?.start).toBe(0);
+    expect(st().splitClip(clip.id, 2)).toBeNull();
+    st().removeClip(clip.id);
+    expect(st().clips).toHaveLength(1);
+    st().toggleTrackLock("v1");
+    st().removeClip(clip.id);
+    expect(st().clips).toHaveLength(0);
+    st().toggleTrackMute("a1");
+    expect(st().tracks.find((t) => t.id === "a1")?.muted).toBe(true);
+    st().toggleTrackMute("a1");
+    expect(st().tracks.find((t) => t.id === "a1")?.muted).toBe(false);
+  });
+
+  it("rippleDeleteClip closes the gap", () => {
+    const st = () => useTimelineStore.getState();
+    const a = st().addClip({ trackId: "v1", name: "A", start: 0, duration: 2 });
+    const b = st().addClip({ trackId: "v1", name: "B", start: 2, duration: 3 });
+    st().addClip({ trackId: "a1", name: "C", start: 2, duration: 3 });
+    st().rippleDeleteClip(a.id);
+    expect(st().clips.find((c) => c.id === a.id)).toBeUndefined();
+    expect(st().clips.find((c) => c.id === b.id)?.start).toBeCloseTo(0);
+    // other tracks untouched
+    expect(st().clips.find((c) => c.name === "C")?.start).toBeCloseTo(2);
+    st().undo();
+    expect(st().clips).toHaveLength(3);
   });
 });

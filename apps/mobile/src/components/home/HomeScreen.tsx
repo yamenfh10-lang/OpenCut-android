@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { Clapperboard, Film, LayoutTemplate, Plus, Trash2 } from "lucide-react";
+import { Clapperboard, Copy, Film, LayoutTemplate, Plus, Trash2, Upload } from "lucide-react";
 import { palette, radii, safe, spacing, typeScale } from "../../theme";
-import { hapticHeavy, hapticTick } from "../../lib/native";
+import { hapticHeavy, hapticTick, shareOrDownload } from "../../lib/native";
 import { listProjects, loadProject, saveProject, deleteProject } from "../../lib/storage";
 import type { ProjectDoc } from "../../lib/storage";
 import { ASPECTS } from "../../lib/presets";
@@ -209,6 +209,70 @@ export default function HomeScreen({ onOpen }: HomeScreenProps) {
     }
     setConfirmDeleteId(null);
     setDrafts((prev) => prev.filter((d) => d.id !== id));
+  }
+
+  async function handleDuplicate(doc: ProjectDoc) {
+    await hapticTick();
+    const id = `proj_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+    const copy: ProjectDoc = {
+      ...doc,
+      id,
+      name: `${doc.name} copy`.slice(0, 80),
+      updatedAt: Date.now(),
+      timeline: {
+        tracks: doc.timeline.tracks.map((t) => ({ ...t })),
+        clips: doc.timeline.clips.map((c) => ({ ...c })),
+        markers: (doc.timeline.markers ?? []).map((m) => ({ ...m })),
+        playhead: doc.timeline.playhead,
+      },
+    };
+    try {
+      await saveProject(copy);
+    } catch {
+      // still show locally
+    }
+    setDrafts((prev) => [copy, ...prev]);
+  }
+
+  async function handleExportJson(doc: ProjectDoc) {
+    await hapticTick();
+    try {
+      const full = await loadProject(doc.id).catch(() => doc);
+      const blob = new Blob([JSON.stringify(full ?? doc, null, 2)], { type: "application/json" });
+      await shareOrDownload(blob, `${(doc.name || "project").replace(/[^\w\-]+/g, "_")}.opencut.json`);
+    } catch {
+      // share sheet unavailable and download failed; ignore
+    }
+  }
+
+  async function handleImportJson(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    try {
+      const raw = JSON.parse(await file.text()) as Partial<ProjectDoc>;
+      if (!raw || typeof raw !== "object" || !raw.timeline || !Array.isArray((raw.timeline as { clips?: unknown }).clips)) {
+        return;
+      }
+      const tl = raw.timeline as ProjectDoc["timeline"];
+      const doc: ProjectDoc = {
+        id: `proj_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+        name: (typeof raw.name === "string" && raw.name.trim() ? raw.name : file.name.replace(/\.opencut\.json$/i, "")).slice(0, 80),
+        updatedAt: Date.now(),
+        aspect: raw.aspect === "9:16" || raw.aspect === "1:1" ? raw.aspect : "16:9",
+        timeline: {
+          tracks: Array.isArray(tl.tracks) && tl.tracks.length > 0 ? tl.tracks : defaultTracks(),
+          clips: tl.clips,
+          markers: Array.isArray(tl.markers) ? tl.markers : [],
+          playhead: typeof tl.playhead === "number" ? Math.max(0, tl.playhead) : 0,
+        },
+      };
+      await saveProject(doc);
+      await hapticTick();
+      void refresh();
+    } catch {
+      // invalid file; ignore
+    }
   }
 
   return (
@@ -424,8 +488,30 @@ export default function HomeScreen({ onOpen }: HomeScreenProps) {
 
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
         <strong style={{ fontSize: typeScale.title }}>Drafts</strong>
-        <span style={{ fontSize: typeScale.caption, color: palette.faint }}>
-          {loading ? "Loading…" : `${drafts.length} project${drafts.length === 1 ? "" : "s"}`}
+        <span style={{ display: "flex", gap: spacing.sm, alignItems: "center" }}>
+          <span style={{ fontSize: typeScale.caption, color: palette.faint }}>
+            {loading ? "Loading…" : `${drafts.length} project${drafts.length === 1 ? "" : "s"}`}
+          </span>
+          <label
+            style={{
+              minHeight: 40,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              padding: "0 12px",
+              borderRadius: radii.md,
+              border: `1px solid ${palette.border}`,
+              background: palette.card,
+              color: palette.text,
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            <Upload size={14} />
+            Import
+            <input type="file" accept="application/json,.json" onChange={(e) => void handleImportJson(e)} style={{ display: "none" }} />
+          </label>
         </span>
       </div>
 
@@ -594,7 +680,43 @@ export default function HomeScreen({ onOpen }: HomeScreenProps) {
                     </button>
                   </span>
                 ) : (
-                  <span style={{ display: "flex", padding: `0 ${spacing.sm}px ${spacing.sm}px` }}>
+                  <span style={{ display: "flex", padding: `0 ${spacing.sm}px ${spacing.sm}px`, gap: 4 }}>
+                    <button
+                      type="button"
+                      aria-label={`Duplicate project ${d.name}`}
+                      onClick={() => void handleDuplicate(d)}
+                      style={{
+                        minHeight: 40,
+                        minWidth: 40,
+                        borderRadius: radii.md,
+                        border: "none",
+                        background: "transparent",
+                        color: palette.faint,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Copy size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Share project file ${d.name}`}
+                      onClick={() => void handleExportJson(d)}
+                      style={{
+                        minHeight: 40,
+                        minWidth: 40,
+                        borderRadius: radii.md,
+                        border: "none",
+                        background: "transparent",
+                        color: palette.faint,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Upload size={16} />
+                    </button>
                     <button
                       type="button"
                       aria-label={`Delete project ${d.name} (long-press also works)`}

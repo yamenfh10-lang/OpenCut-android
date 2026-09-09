@@ -104,6 +104,28 @@ select:focus-visible {
   animation: oc-fade-in 200ms var(--oc-spring);
 }
 
+/* Preview-grade incoming transitions (CapCut-style). Durations set inline. */
+@keyframes oc-tr-dissolve {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes oc-tr-fade-black {
+  from { opacity: 0; filter: brightness(0); }
+  to { opacity: 1; filter: brightness(1); }
+}
+@keyframes oc-tr-wipe {
+  from { clip-path: inset(0 100% 0 0); }
+  to { clip-path: inset(0 0 0 0); }
+}
+@keyframes oc-tr-slide {
+  from { transform: translateX(60px); opacity: 0.4; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@keyframes oc-tr-zoom {
+  from { transform: scale(1.18); opacity: 0.6; }
+  to { transform: scale(1); opacity: 1; }
+}
+
 /* Scrubber: chunky native slider thumb. */
 input[type="range"].oc-scrub {
   -webkit-appearance: none;
