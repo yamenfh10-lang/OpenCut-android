@@ -337,8 +337,7 @@ describe("timeline store", () => {
     expect(st().tracks.find((t) => t.id === "a1")?.muted).toBe(false);
   });
 
-  it("rippleDeleteClip closes the gap", () => {
-    const st = () => useTimelineStore.getState();
+  it("rippleDeleteClip closes the gap", () => {    const st = () => useTimelineStore.getState();
     const a = st().addClip({ trackId: "v1", name: "A", start: 0, duration: 2 });
     const b = st().addClip({ trackId: "v1", name: "B", start: 2, duration: 3 });
     st().addClip({ trackId: "a1", name: "C", start: 2, duration: 3 });
@@ -349,5 +348,15 @@ describe("timeline store", () => {
     expect(st().clips.find((c) => c.name === "C")?.start).toBeCloseTo(2);
     st().undo();
     expect(st().clips).toHaveLength(3);
+  });
+
+  it("setClipKenBurns toggles the photo zoom effect", () => {
+    const st = () => useTimelineStore.getState();
+    const clip = st().addClip({ trackId: "v1", name: "photo.jpg", start: 0, duration: 3, kind: "image" });
+    expect(st().clips.find((c) => c.id === clip.id)?.kenburns).toBeUndefined();
+    st().setClipKenBurns(clip.id, true);
+    expect(st().clips.find((c) => c.id === clip.id)?.kenburns).toBe(true);
+    st().undo();
+    expect(st().clips.find((c) => c.id === clip.id)?.kenburns).toBeUndefined();
   });
 });

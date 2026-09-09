@@ -117,6 +117,76 @@ export const BUILTIN_TEMPLATES: BuiltinTemplate[] = [
     ],
     markers: [marker("tpl4_m1", 2.5, "CTA", "red")],
   },
+  {
+    id: "birthday",
+    name: "Birthday Bash",
+    description: "9:16 birthday opener with vivid cards and party beats.",
+    aspect: "9:16",
+    tracks: tracks(),
+    clips: [
+      textCard("tpl5_bday", "HAPPY BIRTHDAY", 0, 2, {
+        colorLabel: "yellow",
+        filter: { brightness: 1.05, contrast: 1.2, saturation: 1.6, grayscale: 0, sepia: 0, invert: 0 },
+      }),
+      textCard("tpl5_name", "TO YOU", 2, 2, { colorLabel: "mauve" }),
+    ],
+    markers: [
+      marker("tpl5_m1", 0, "Drop", "red"),
+      marker("tpl5_m2", 2, "Name", "yellow"),
+    ],
+  },
+  {
+    id: "quote",
+    name: "Quote of the Day",
+    description: "1:1 minimal quote card, perfect for daily posts.",
+    aspect: "1:1",
+    tracks: tracks(),
+    clips: [
+      textCard("tpl6_quote", "DO IT TODAY", 0, 3, {
+        colorLabel: "none",
+        filter: { brightness: 0.95, contrast: 1.1, saturation: 0.4, grayscale: 0.3, sepia: 0, invert: 0 },
+      }),
+    ],
+    markers: [marker("tpl6_m1", 0, "Quote", "blue")],
+  },
+  {
+    id: "flash-sale",
+    name: "Flash Sale",
+    description: "9:16 promo: hook, discount, urgency countdown cards.",
+    aspect: "9:16",
+    tracks: tracks(),
+    clips: [
+      textCard("tpl7_hook", "FLASH SALE", 0, 1.5, {
+        colorLabel: "red",
+        filter: { brightness: 1, contrast: 1.3, saturation: 1.5, grayscale: 0, sepia: 0, invert: 0 },
+      }),
+      textCard("tpl7_off", "-50% TODAY", 1.5, 1.5, { colorLabel: "yellow" }),
+      textCard("tpl7_go", "SHOP NOW", 3, 2, { colorLabel: "green" }),
+    ],
+    markers: [
+      marker("tpl7_m1", 0, "Hook", "red"),
+      marker("tpl7_m2", 1.5, "Offer", "yellow"),
+      marker("tpl7_m3", 3, "CTA", "green"),
+    ],
+  },
+  {
+    id: "travel-intro",
+    name: "Travel Intro",
+    description: "16:9 cinematic title + destination cards with faded film look.",
+    aspect: "16:9",
+    tracks: tracks(),
+    clips: [
+      textCard("tpl8_title", "WANDERLUST", 0, 2.5, {
+        colorLabel: "blue",
+        filter: { brightness: 1.08, contrast: 0.85, saturation: 0.7, grayscale: 0, sepia: 0, invert: 0 },
+      }),
+      textCard("tpl8_dest", "EP. 01 — THE COAST", 2.5, 2.5, { colorLabel: "none" }),
+    ],
+    markers: [
+      marker("tpl8_m1", 0, "Title", "blue"),
+      marker("tpl8_m2", 2.5, "Episode", "purple"),
+    ],
+  },
 ];
 
 export function getTemplate(id: string): BuiltinTemplate | null {

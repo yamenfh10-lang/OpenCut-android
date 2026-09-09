@@ -294,8 +294,7 @@ export default function AdjustSheet({ onDone }: { onDone: () => void }) {
       </div>
 
       <div>
-        <div style={sectionTitle}>Color label</div>
-        <div style={{ display: "flex", gap: spacing.sm, flexWrap: "wrap" }}>
+        <div style={sectionTitle}>Color label</div>        <div style={{ display: "flex", gap: spacing.sm, flexWrap: "wrap" }}>
           {COLOR_LABELS.map((c) => {
             const active = (selected.colorLabel ?? "none") === c.id;
             return (
@@ -375,9 +374,38 @@ export default function AdjustSheet({ onDone }: { onDone: () => void }) {
         </div>
       </div>
 
+      {selected.kind === "image" || !selected.src ? (
+        <button
+          type="button"
+          role="switch"
+          aria-checked={selected.kenburns === true}
+          onClick={() => {
+            st.setClipKenBurns(selected.id, !(selected.kenburns === true));
+            void hapticTick();
+          }}
+          style={{
+            minHeight: 52,
+            borderRadius: radii.md,
+            border: selected.kenburns === true ? "2px solid #fafafa" : "1px solid #27272a",
+            background: "#1b1b1f",
+            color: "#fafafa",
+            fontSize: 14,
+            fontWeight: 700,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "0 14px",
+          }}
+        >
+          <span>Ken Burns slow-zoom (photos)</span>
+          <span style={{ fontSize: 12, color: "#a1a1aa" }}>
+            {selected.kenburns === true ? "ON" : "OFF"}
+          </span>
+        </button>
+      ) : null}
+
       <div>
-        <div style={sectionTitle}>Effects</div>
-        <div style={{ display: "flex", gap: spacing.sm }}>
+        <div style={sectionTitle}>Effects</div>        <div style={{ display: "flex", gap: spacing.sm }}>
           <button
             type="button"
             onClick={() => {

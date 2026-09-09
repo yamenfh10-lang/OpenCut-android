@@ -24,8 +24,8 @@ import {
 } from "./presets";
 
 describe("builtin templates", () => {
-  it("ships at least 3 offline templates with valid timelines", () => {
-    expect(BUILTIN_TEMPLATES.length).toBeGreaterThanOrEqual(3);
+  it("ships at least 7 offline templates with valid timelines", () => {
+    expect(BUILTIN_TEMPLATES.length).toBeGreaterThanOrEqual(7);
     for (const t of BUILTIN_TEMPLATES) {
       expect(t.id.length).toBeGreaterThan(0);
       expect(t.tracks.length).toBeGreaterThan(0);

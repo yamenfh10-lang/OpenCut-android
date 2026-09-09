@@ -39,6 +39,7 @@ export interface ExportClipLike {
   layout?: string;
   shape?: string;
   shapeColor?: string;
+  kenburns?: boolean;
 }
 
 export interface ExportMarkerLike {
@@ -515,6 +516,7 @@ export async function exportProject(opts: ExportProjectOptions): Promise<Blob> {
       layout: c.layout ?? "full",
       shape: c.shape ?? null,
       shapeColor: c.shapeColor ?? null,
+      kenburns: c.kenburns ?? false,
     })),
     tracks: (opts.tracks ?? []).map((t) => ({
       id: t.id,

@@ -24,8 +24,11 @@ export default function ImportSheet({ onDone }: { onDone: () => void }) {
     if (files.length === 0) return;
     for (const file of files) {
       try {
+        const isImage = file.type.startsWith("image/");
         const { getMetadata } = await import("../../../lib/engine");
-        const meta = await getMetadata(file);
+        const meta = isImage
+          ? { duration: null, width: null, height: null, hasVideo: false, hasAudio: false }
+          : await getMetadata(file);
         const src = URL.createObjectURL(file);
         setItems((prev) => [
           ...prev,
@@ -33,13 +36,14 @@ export default function ImportSheet({ onDone }: { onDone: () => void }) {
             key: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
             name: file.name,
             src,
-            duration: meta.duration ?? 5,
+            // Photos have no duration: default stills to 3s (devhyper-style).
+            duration: meta.duration ?? (isImage ? 3 : 5),
             meta,
             file,
           },
         ]);
         setProbe(
-          `Picked ${file.name} — duration=${meta.duration ?? "?"}s ` +
+          `Picked ${file.name} — duration=${meta.duration ?? (isImage ? "3 (photo)" : "?")}s ` +
             `video=${meta.hasVideo} ${meta.width ?? "?"}x${meta.height ?? "?"}`,
         );
       } catch (err) {
@@ -51,7 +55,8 @@ export default function ImportSheet({ onDone }: { onDone: () => void }) {
 
   async function append(item: PickedItem) {
     const start = timelineDuration(useTimelineStore.getState().clips);
-    const trackId = item.meta.hasAudio && !item.meta.hasVideo ? "a1" : "v1";
+    const isImage = item.file.type.startsWith("image/");
+    const trackId = !isImage && item.meta.hasAudio && !item.meta.hasVideo ? "a1" : "v1";
     // Persist bytes offline-first (best effort), keep object URL for playback.
     try {
       await saveBlob(`media_${item.key}`, item.file);
@@ -62,8 +67,9 @@ export default function ImportSheet({ onDone }: { onDone: () => void }) {
       trackId,
       name: item.name,
       start,
-      duration: Math.max(0.1, item.duration),
+      duration: Math.max(0.5, item.duration),
       src: item.src,
+      ...(isImage ? { kind: "image" as const } : {}),
     });
     useTimelineStore.getState().selectClip(clip.id);
     await hapticTick();
@@ -91,7 +97,7 @@ export default function ImportSheet({ onDone }: { onDone: () => void }) {
         Pick media
         <input
           type="file"
-          accept="video/*,audio/*"
+          accept="video/*,audio/*,image/*"
           multiple
           onChange={(e) => void handlePick(e)}
           style={{ display: "none" }}

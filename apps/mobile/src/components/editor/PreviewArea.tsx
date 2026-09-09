@@ -322,11 +322,13 @@ export default function PreviewArea({ videoRef, onEnterFullscreen }: PreviewArea
           onAnimationEnd={() => setEntrance(null)}
         >
           {active.kind === "image" && active.src ? (
+            <div className={active.kenburns === true ? "oc-kenburns" : undefined} style={{ width: "100%", height: "100%" }}>
             <img
               src={active.src}
               alt={active.name}
               style={mediaStyle(crop, active)}
             />
+            </div>
           ) : (
             <video
               ref={videoRef}

@@ -43,6 +43,8 @@ export interface TimelineClip {
   /** Sticker shape for `kind === "shape"`. Optional. */
   shape?: ShapeId;
   shapeColor?: string;
+  /** Ken Burns slow-zoom for photo clips. Optional, default off. */
+  kenburns?: boolean;
 }
 
 export interface TimelineMarker {
@@ -107,6 +109,7 @@ interface TimelineState {
   setClipTransition: (clipId: string, transition: Partial<ClipTransition>) => void;
   setClipLayout: (clipId: string, layout: string) => void;
   setClipShape: (clipId: string, shape: { shape?: string; shapeColor?: string }) => void;
+  setClipKenBurns: (clipId: string, on: boolean) => void;
   toggleTrackMute: (trackId: string) => void;
   toggleTrackLock: (trackId: string) => void;
   rippleDeleteClip: (clipId: string) => void;
@@ -396,6 +399,14 @@ export const useTimelineStore = create<TimelineState>()((set, get) => ({
               }
             : c,
         ),
+      });
+    }),
+
+  setClipKenBurns: (clipId, on) =>
+    set((s) => {
+      if (!s.clips.some((c) => c.id === clipId)) return s;
+      return pushHistory(s, {
+        clips: s.clips.map((c) => (c.id === clipId ? { ...c, kenburns: on === true } : c)),
       });
     }),
 

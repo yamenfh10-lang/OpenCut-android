@@ -80,7 +80,13 @@ export default function FullscreenPreview({ onClose }: FullscreenPreviewProps) {
       </div>
 
       <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", minHeight: 0, padding: `0 ${spacing.md}px` }}>
-        {active?.src ? (
+        {active?.kind === "image" && active.src ? (
+          <img
+            src={active.src}
+            alt={active.name}
+            style={{ width: "100%", maxHeight: "100%", background: "#000", objectFit: "contain" }}
+          />
+        ) : active?.src ? (
           <video
             ref={videoRef}
             src={active.src}

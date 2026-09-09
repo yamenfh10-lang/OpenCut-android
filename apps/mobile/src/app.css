@@ -126,6 +126,16 @@ select:focus-visible {
   to { transform: scale(1); opacity: 1; }
 }
 
+/* Ken Burns slow-zoom for photo clips (alternate infinite). */
+@keyframes oc-kenburns {
+  from { transform: scale(1); }
+  to { transform: scale(1.18); }
+}
+.oc-kenburns {
+  animation: oc-kenburns 6s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
 /* Scrubber: chunky native slider thumb. */
 input[type="range"].oc-scrub {
   -webkit-appearance: none;
