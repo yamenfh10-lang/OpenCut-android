@@ -1,0 +1,32 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+language: 'typescript'
+layer: 'application'
+
+tasks:
+  dev:
+    command: 'bun run dev'
+    options:
+      runInCI: false # dev server: skipped in CI, never cached
+
+  build:
+    command: 'bun run build'
+    inputs:
+      - 'src/**/*'
+      - 'index.html'
+      - 'vite.config.ts'
+      - 'capacitor.config.ts'
+      - 'tsconfig.json'
+      - 'package.json'
+    outputs:
+      - 'dist'
+
+  sync:
+    command: 'bun run sync:cap'
+    deps:
+      - '~:build'
+
+  open:
+    command: 'bun run open:android'
+    options:
+      runInCI: false

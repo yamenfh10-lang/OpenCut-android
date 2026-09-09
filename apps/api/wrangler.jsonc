@@ -3,5 +3,30 @@
   "name": "opencut-api",
   "main": "src/index.ts",
   // Minimum date required for CloudflareAdapter AoT support
-  "compatibility_date": "2025-06-01"
+  "compatibility_date": "2025-06-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "observability": {
+    "enabled": true
+  },
+  // Public, non-secret placeholders only. Never put secrets here —
+  // use `wrangler secret put <NAME>` instead.
+  "vars": {
+    "APP_URL": "https://new.opencut.app",
+    "API_VERSION": "v1"
+  }
+  // Optional bindings (uncomment + fill in real ids when provisioned).
+  // "kv_namespaces": [
+  //   { "binding": "OPENCUT_KV", "id": "REPLACE_WITH_KV_ID" }
+  // ],
+  // "r2_buckets": [
+  //   { "binding": "OPENCUT_R2", "bucket_name": "REPLACE_WITH_BUCKET_NAME" }
+  // ],
+  // "d1_databases": [
+  //   {
+  //     "binding": "OPENCUT_DB",
+  //     "database_name": "opencut",
+  //     "database_id": "REPLACE_WITH_D1_ID"
+  //   }
+  // ]
 }
