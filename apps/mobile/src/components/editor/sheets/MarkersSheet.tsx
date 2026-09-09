@@ -7,13 +7,49 @@ import { hapticHeavy, hapticTick } from "../../../lib/native";
 // LumoCut-style colored timeline markers: add at playhead, jump, rename, delete.
 export default function MarkersSheet({ onDone }: { onDone: () => void }) {
   const markers = useTimelineStore((s) => s.markers);
+  const clips = useTimelineStore((s) => s.clips);
   const playhead = useTimelineStore((s) => s.playhead);
   const setPlayhead = useTimelineStore((s) => s.setPlayhead);
   const [label, setLabel] = useState("");
   const [color, setColor] = useState<string>("red");
   const [jumpTo, setJumpTo] = useState("");
+  const [beatsBusy, setBeatsBusy] = useState(false);
+  const [beatsNote, setBeatsNote] = useState("");
 
   const sorted = [...markers].sort((a, b) => a.time - b.time);
+
+  async function handleAutoBeats() {
+    // Spectral-flux beat detection on the selected (or first) audio clip.
+    const st = useTimelineStore.getState();
+    const target =
+      clips.find((c) => c.id === st.selectedClipId && c.src) ??
+      clips.find((c) => c.src && (c.kind === "audio" || c.trackId === "a1"));
+    if (!target?.src) {
+      setBeatsNote("Select an audio clip first.");
+      return;
+    }
+    setBeatsBusy(true);
+    try {
+      const res = await fetch(target.src);
+      const blob = await res.blob();
+      const { detectBeatsInBlob } = await import("../../../lib/audio");
+      const beats = await detectBeatsInBlob(blob);
+      if (beats.length === 0) {
+        setBeatsNote("No clear beats found in this clip.");
+        return;
+      }
+      const capped = beats.slice(0, 64);
+      for (const t of capped) {
+        st.addMarker({ time: t, label: `Beat ${t.toFixed(1)}s`, color: "yellow" });
+      }
+      setBeatsNote(`Added ${capped.length} beat markers.`);
+      await hapticTick();
+    } catch (err) {
+      setBeatsNote(`Beat detection failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setBeatsBusy(false);
+    }
+  }
 
   async function handleAdd() {
     useTimelineStore.getState().addMarker({
@@ -128,6 +164,28 @@ export default function MarkersSheet({ onDone }: { onDone: () => void }) {
           Go
         </button>
       </div>
+
+      <button
+        type="button"
+        onClick={() => void handleAutoBeats()}
+        disabled={beatsBusy}
+        style={{
+          minHeight: 52,
+          borderRadius: radii.md,
+          border: `1px solid ${palette.borderStrong}`,
+          background: palette.card,
+          color: palette.text,
+          fontWeight: 800,
+          opacity: beatsBusy ? 0.6 : 1,
+        }}
+      >
+        {beatsBusy ? "Listening…" : "♫ Auto-detect beats → markers"}
+      </button>
+      {beatsNote ? (
+        <p style={{ fontSize: 12, color: palette.muted, margin: 0 }} role="status">
+          {beatsNote}
+        </p>
+      ) : null}
 
       {sorted.length === 0 ? (
         <p style={{ fontSize: 13, color: palette.faint, margin: 0 }}>

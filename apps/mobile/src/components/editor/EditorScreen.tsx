@@ -132,6 +132,9 @@ export default function EditorScreen({
       case "snapshot":
         await handleSnapshot();
         break;
+      case "freeze":
+        await handleFreeze();
+        break;
       case "delete": {
         const id = st.selectedClipId;
         if (!id) break;
@@ -166,6 +169,41 @@ export default function EditorScreen({
       await hapticTick();
     } catch (err) {
       setStatus(`Snapshot failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  async function handleFreeze() {
+    // VN-style freeze frame: capture the current preview frame and insert
+    // it as a 1.5s still image clip at the playhead.
+    const v = videoRef.current;
+    if (!v || !v.src) {
+      setStatus("Play a clip first, then freeze a frame.");
+      return;
+    }
+    try {
+      const st = useTimelineStore.getState();
+      const { captureVideoFrame } = await import("../../lib/engine");
+      const blob = await captureVideoFrame(v, "freeze");
+      const url = URL.createObjectURL(blob);
+      try {
+        await saveBlob(`freeze_${Date.now()}`, blob);
+      } catch {
+        // object URL still works this session
+      }
+      const clip = st.addClip({
+        trackId: "v1",
+        name: `Freeze ${st.playhead.toFixed(1)}s`,
+        start: st.playhead,
+        duration: 1.5,
+        src: url,
+        kind: "image",
+      });
+      st.selectClip(clip.id);
+      setStatus(`Frozen 1.5s still at ${st.playhead.toFixed(1)}s.`);
+      await hapticHeavy();
+      void persistQuietly();
+    } catch (err) {
+      setStatus(`Freeze failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 

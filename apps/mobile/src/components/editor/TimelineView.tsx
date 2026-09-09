@@ -10,8 +10,27 @@ const PX_PER_SEC = 56;
 
 function ClipThumb({ clip }: { clip: TimelineClip }) {
   const [url, setUrl] = useState<string | null>(null);
+  const [wave, setWave] = useState<number[] | null>(null);
   useEffect(() => {
     if (!clip.src) return;
+    // Audio clips: draw a waveform instead of a thumbnail.
+    if (clip.kind === "audio" || (!clip.kind && clip.trackId === "a1")) {
+      let alive = true;
+      (async () => {
+        try {
+          const res = await fetch(clip.src as string);
+          const blob = await res.blob();
+          const { getWaveform } = await import("../../lib/audio");
+          const w = await getWaveform(blob, 32);
+          if (alive && w) setWave(w.peaks);
+        } catch {
+          // placeholder stays
+        }
+      })();
+      return () => {
+        alive = false;
+      };
+    }
     let alive = true;
     let obj: string | null = null;
     (async () => {
@@ -29,7 +48,29 @@ function ClipThumb({ clip }: { clip: TimelineClip }) {
       alive = false;
       if (obj) URL.revokeObjectURL(obj);
     };
-  }, [clip.src, clip.name]);
+  }, [clip.src, clip.name, clip.kind, clip.trackId]);
+
+  if (wave) {
+    return (
+      <div
+        aria-hidden
+        style={{ width: "100%", height: 34, display: "flex", alignItems: "center", gap: 1.5, padding: "0 4px" }}
+      >
+        {wave.map((p, i) => (
+          <span
+            key={i}
+            style={{
+              flex: 1,
+              height: `${Math.round(6 + p * 26)}px`,
+              borderRadius: 2,
+              background: "#a1a1aa",
+              opacity: 0.55 + p * 0.45,
+            }}
+          />
+        ))}
+      </div>
+    );
+  }
 
   if (url) {
     return (

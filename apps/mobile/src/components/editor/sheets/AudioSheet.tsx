@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { palette, radii, spacing } from "../../../theme";
 import { timelineDuration, useTimelineStore } from "../../../stores/timeline";
 import { hapticTick } from "../../../lib/native";
@@ -6,6 +6,9 @@ import { hapticTick } from "../../../lib/native";
 export default function AudioSheet({ onDone }: { onDone: () => void }) {
   const [status, setStatus] = useState("Extract audio from the selected video, or pick a file.");
   const [busy, setBusy] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
   const clips = useTimelineStore((s) => s.clips);
   const selectedClipId = useTimelineStore((s) => s.selectedClipId);
   const addClip = useTimelineStore((s) => s.addClip);
@@ -68,8 +71,74 @@ export default function AudioSheet({ onDone }: { onDone: () => void }) {
     }
   }
 
+  async function handleRecord() {
+    // LumoCut-style voiceover: record mic straight onto the audio track.
+    if (recording) {
+      try {
+        recorderRef.current?.stop();
+      } catch {
+        setRecording(false);
+      }
+      return;
+    }
+    try {
+      const nav = globalThis.navigator as Navigator & {
+        mediaDevices?: { getUserMedia: (c: { audio: boolean }) => Promise<MediaStream> };
+      };
+      const stream = await nav.mediaDevices?.getUserMedia({ audio: true });
+      if (!stream) throw new Error("microphone unavailable");
+      const MR =
+        (globalThis as unknown as { MediaRecorder?: typeof MediaRecorder }).MediaRecorder;
+      if (!MR) throw new Error("recording unsupported on this device");
+      const rec = new MR(stream);
+      chunksRef.current = [];
+      rec.ondataavailable = (e: BlobEvent) => {
+        if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
+      };
+      rec.onstop = () => {
+        void (async () => {
+          try {
+            const blob = new Blob(chunksRef.current, { type: rec.mimeType || "audio/webm" });
+            stream.getTracks().forEach((t) => t.stop());
+            if (blob.size > 0) {
+              await addAudioBlob(blob, `Voiceover ${new Date().toLocaleTimeString()}`);
+              setStatus("Voiceover placed on the audio track.");
+            } else {
+              setStatus("Recording was empty — try again.");
+            }
+          } catch (err) {
+            setStatus(`Voiceover failed: ${err instanceof Error ? err.message : String(err)}`);
+          } finally {
+            setRecording(false);
+          }
+        })();
+      };
+      recorderRef.current = rec;
+      rec.start();
+      setRecording(true);
+      setStatus("Recording… tap again to stop.");
+    } catch (err) {
+      setStatus(`Mic unavailable: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: spacing.md }}>
+      <button
+        type="button"
+        onClick={() => void handleRecord()}
+        disabled={busy}
+        style={{
+          minHeight: 52,
+          borderRadius: radii.md,
+          border: recording ? `2px solid ${palette.danger}` : "none",
+          background: recording ? "#1f1215" : palette.text,
+          color: recording ? palette.danger : "#09090b",
+          fontWeight: 800,
+        }}
+      >
+        {recording ? "● Stop recording" : "● Record voiceover"}
+      </button>
       <button
         type="button"
         onClick={() => void handleExtractSelected()}

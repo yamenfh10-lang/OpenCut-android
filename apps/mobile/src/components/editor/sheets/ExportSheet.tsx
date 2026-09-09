@@ -21,6 +21,33 @@ export default function ExportSheet({ aspect, onDone }: { aspect: string; onDone
   const [status, setStatus] = useState("Choose quality, then export.");
   const [busy, setBusy] = useState(false);
 
+  async function handleSubtitles(kind: "srt" | "vtt") {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const st = useTimelineStore.getState();
+      const { buildSrt, buildVtt, cuesFromTextClips } = await import("../../../lib/subtitles");
+      const cues = cuesFromTextClips(st.clips);
+      if (cues.length === 0) {
+        setStatus("No text clips on the timeline to export.");
+        return;
+      }
+      const text = kind === "srt" ? buildSrt(cues) : buildVtt(cues);
+      const blob = new Blob([text], { type: "text/plain" });
+      const how = await shareOrDownload(blob, `opencut-subtitles.${kind}`);
+      setStatus(
+        how === "shared"
+          ? `${cues.length} cues shared as ${kind.toUpperCase()}.`
+          : `${cues.length} cues downloaded as ${kind.toUpperCase()}.`,
+      );
+      await hapticNotify();
+    } catch (err) {
+      setStatus(`Subtitle export failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function handleExport() {
     if (busy) return;
     setBusy(true);
@@ -201,6 +228,33 @@ export default function ExportSheet({ aspect, onDone }: { aspect: string; onDone
           </div>
         </div>
       ) : null}
+
+      <div>
+        <div style={{ fontSize: 13, color: palette.muted, marginBottom: 6 }}>Subtitles from text clips</div>
+        <div style={{ display: "flex", gap: spacing.sm }}>
+          {(["srt", "vtt"] as const).map((k) => (
+            <button
+              key={k}
+              type="button"
+              onClick={() => void handleSubtitles(k)}
+              disabled={busy}
+              aria-label={`Export subtitles as ${k.toUpperCase()}`}
+              style={{
+                flex: 1,
+                minHeight: 48,
+                borderRadius: radii.md,
+                border: `1px solid ${palette.border}`,
+                background: palette.card,
+                color: palette.text,
+                fontWeight: 700,
+                opacity: busy ? 0.6 : 1,
+              }}
+            >
+              .{k.toUpperCase()}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <button
         type="button"

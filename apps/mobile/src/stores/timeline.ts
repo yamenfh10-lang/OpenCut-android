@@ -20,7 +20,7 @@ export interface TimelineClip {
    * Clip media kind. Optional for backwards compat; treat undefined as
    * "video" (old projects only had video/audio tracks and no text cards).
    */
-  kind?: "video" | "audio" | "text";
+  kind?: "video" | "audio" | "text" | "image";
   /** Overlay text for `kind === "text"` title cards. Optional, backwards compatible. */
   text?: string;
   /** Color grade (LumoCut-style per-clip filter). Optional, defaults to neutral. */

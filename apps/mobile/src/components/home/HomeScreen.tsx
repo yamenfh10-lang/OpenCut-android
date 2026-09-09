@@ -92,6 +92,7 @@ export default function HomeScreen({ onOpen }: HomeScreenProps) {
   const [creating, setCreating] = useState(false);
   const [aspect, setAspect] = useState<ProjectAspect>("16:9");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [showCoach, setShowCoach] = useState(false);
   const loadTimeline = useTimelineStore((s) => s.loadTimeline);
 
   async function refresh() {
@@ -108,7 +109,22 @@ export default function HomeScreen({ onOpen }: HomeScreenProps) {
 
   useEffect(() => {
     void refresh();
+    try {
+      const seen = globalThis.localStorage?.getItem("oc_onboarded_v1");
+      if (!seen) setShowCoach(true);
+    } catch {
+      // private mode: skip coach
+    }
   }, []);
+
+  function dismissCoach() {
+    setShowCoach(false);
+    try {
+      globalThis.localStorage?.setItem("oc_onboarded_v1", "1");
+    } catch {
+      // ignore
+    }
+  }
 
   async function handleCreate() {
     if (creating) return;
@@ -227,6 +243,49 @@ export default function HomeScreen({ onOpen }: HomeScreenProps) {
           <strong style={{ fontSize: typeScale.largeTitle, letterSpacing: -0.3 }}>OpenCut</strong>
         </div>
       </header>
+
+      {showCoach ? (
+        <div
+          role="dialog"
+          aria-label="Getting started"
+          style={{
+            borderRadius: radii.lg,
+            border: `1px solid ${palette.borderStrong}`,
+            background: palette.cardElevated,
+            padding: spacing.lg,
+            display: "flex",
+            flexDirection: "column",
+            gap: spacing.sm,
+          }}
+        >
+          <strong style={{ fontSize: typeScale.title }}>Edit like CapCut, offline</strong>
+          {[
+            "1. New Project or a ready Template",
+            "2. Import clips, arrange on the timeline",
+            "3. Adjust speed, filters, text, markers",
+            "4. Export video or subtitles",
+          ].map((s) => (
+            <div key={s} style={{ fontSize: typeScale.body, color: palette.textSecondary }}>
+              {s}
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={dismissCoach}
+            style={{
+              minHeight: 48,
+              marginTop: spacing.sm,
+              borderRadius: radii.md,
+              border: "none",
+              background: palette.text,
+              color: "#09090b",
+              fontWeight: 800,
+            }}
+          >
+            Got it
+          </button>
+        </div>
+      ) : null}
 
       <button
         type="button"

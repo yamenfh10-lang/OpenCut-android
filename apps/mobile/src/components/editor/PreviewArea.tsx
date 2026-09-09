@@ -113,6 +113,44 @@ export default function PreviewArea({ videoRef, onEnterFullscreen }: PreviewArea
               : `${clips.length} clip(s) — tap Import below`}
           </div>
         </div>
+      ) : active.kind === "image" && active.src ? (
+        <div style={{ position: "relative" }}>
+          <img
+            src={active.src}
+            alt={active.name}
+            style={{
+              width: "100%",
+              aspectRatio: "16 / 9",
+              maxHeight: "32dvh",
+              background: "#000",
+              display: "block",
+              objectFit: "contain",
+              filter: cssFilter(active.filter),
+              transform: cssTransform(active.transform),
+            }}
+          />
+          <button
+            type="button"
+            onClick={onEnterFullscreen}
+            aria-label="Open fullscreen preview"
+            style={{
+              position: "absolute",
+              top: spacing.sm,
+              right: spacing.sm,
+              minHeight: 48,
+              minWidth: 48,
+              borderRadius: radii.md,
+              border: "1px solid rgba(255,255,255,0.25)",
+              background: "rgba(0,0,0,0.55)",
+              color: "#fff",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Maximize2 size={18} />
+          </button>
+        </div>
       ) : active.kind === "text" ? (
         <div style={{ position: "relative" }}>
           <div

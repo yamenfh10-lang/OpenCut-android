@@ -5,6 +5,7 @@ import {
   Gauge,
   Scissors,
   SlidersHorizontal,
+  Snowflake,
   Trash2,
   Type,
   Upload,
@@ -12,7 +13,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { palette, radii, spacing, typeScale } from "../../theme";
 
-export type ToolId = "import" | "split" | "speed" | "adjust" | "markers" | "text" | "audio" | "snapshot" | "delete";
+export type ToolId = "import" | "split" | "speed" | "adjust" | "markers" | "freeze" | "text" | "audio" | "snapshot" | "delete";
 
 interface ToolBarProps {
   activeTool: ToolId | null;
@@ -26,6 +27,7 @@ const tools: { id: ToolId; label: string; icon: LucideIcon }[] = [
   { id: "speed", label: "Speed", icon: Gauge },
   { id: "adjust", label: "Adjust", icon: SlidersHorizontal },
   { id: "markers", label: "Markers", icon: Flag },
+  { id: "freeze", label: "Freeze", icon: Snowflake },
   { id: "text", label: "Text", icon: Type },
   { id: "audio", label: "Audio", icon: AudioLines },
   { id: "snapshot", label: "Snapshot", icon: Camera },
